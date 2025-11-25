@@ -1,30 +1,52 @@
-/*** Lightee – Watermark Overlay (opravené) ***/
-.p .image {
+/* ===========================
+   Lightee Watermark — Global
+   =========================== */
+
+/* KATEGÓRIE (listing) */
+.product .image {
     position: relative !important;
     overflow: hidden !important;
 }
 
-.p .image::after {
+.product .image::after {
     content: "";
     position: absolute;
     inset: 0;
-    background-image: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
-    background-repeat: repeat;
-    background-size: 320px auto; /* uprav podľa potreby */
-    background-position: center;
-    opacity: 0.25; /* upraviteľné */
+    background: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png") repeat;
+    background-size: 260px auto; /* uprav podľa potreby */
+    opacity: 0.22;               /* upraviteľné */
     pointer-events: none;
     z-index: 1;
 }
 
-/* zabezpečí, že texty budú nad watermarkom */
-.p-in,
-.p-bottom,
-.flags,
+
+/* DETAIL PRODUKTU */
+.p-image-wrapper .p-image {
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.p-image-wrapper .p-image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png") repeat;
+    background-size: 300px auto;
+    opacity: 0.22;
+    pointer-events: none;
+    z-index: 2;
+}
+
+
+/* TEXTY, CENY, TLAČIDLÁ NAD WATERMARKOM */
+.product .p-in,
+.product .p-bottom,
+.product .flags,
+.p-image-wrapper,
 .price,
-.name,
 .availability,
-.p-desc {
+.p-desc,
+.name {
     position: relative !important;
     z-index: 5 !important;
 }
