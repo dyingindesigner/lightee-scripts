@@ -1,66 +1,52 @@
-/* ===========================
-   Lightee Watermark — Global
-   =========================== */
+/* ==============================
+   Lightee Watermark (pure IMG)
+   ============================== */
 
+img {
+    --wm-img: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
+}
 
-/* ===================================== */
-/*   A) KATEGÓRIE — obrázky v listingu   */
-/* ===================================== */
-
-.product .image {
+/* Všetky produktové obrázky (listing + detail + lightbox) */
+.product .image img,
+.p-image img,
+.cbox img,
+.p-main-image img {
     position: relative !important;
-    overflow: hidden !important;
+    z-index: 1;
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+
+    /* WATERMARK MASKA */
+    mask-image: var(--wm-img);
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-image: var(--wm-img);
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+
+    /* Watermark opacity */
+    opacity: 0.85; /* čím nižšie, tým viac vidno WM */
 }
 
-.product .image::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
-    background-size: 55%;        /* veľkosť watermarku */
-    background-repeat: no-repeat;
-    background-position: center center;
-    opacity: 0.25;               /* upraviteľná intenzita */
-    pointer-events: none;
-    z-index: 2;
+/* Aby watermark neovplyvnil overlay efekty, zoom, cbox atď */
+.product .image,
+.p-image,
+.cbox {
+    position: relative;
+    overflow: hidden;
 }
 
-
-/* ===================================== */
-/*       B) DETAIL PRODUKTU — hlavný obrázok */
-/* ===================================== */
-
-.p-image-wrapper .p-image {
-    position: relative !important;
-    overflow: hidden !important;
-}
-
-.p-image-wrapper .p-image::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
-    background-size: 50%;         /* veľkosť watermarku na detaile */
-    background-repeat: no-repeat;
-    background-position: center center;
-    opacity: 0.25;
-    pointer-events: none;
-    z-index: 2;
-}
-
-
-/* ===================================== */
-/*    VŠETKY TEXTY, FLAGY, CENY NAD WM   */
-/* ===================================== */
-
+/* Texty, tlačidlá, labely nad WM */
 .product .p-in,
 .product .p-bottom,
 .product .flags,
 .price,
 .availability,
 .p-desc,
-.name,
-.p-image-wrapper + * {
-    position: relative !important;
+.name {
+    position: relative;
     z-index: 5 !important;
 }
