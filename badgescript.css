@@ -1,0 +1,18 @@
+/* Lightee – Badge Style */
+.lightee-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #0a84ff;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 99999;
+}
