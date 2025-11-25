@@ -1,0 +1,23 @@
+/* ===== GLOBAL WATERMARK FOR ALL PRODUCT IMAGES ===== */
+
+.product .image {
+    position: relative;
+}
+
+.product .image img {
+    display: block;
+}
+
+/* Watermark overlay */
+.product .image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
+    background-repeat: repeat;
+    background-size: 180px auto;  /* veľkosť vodotlače – môžeš upraviť */
+    opacity: 0.25;                /* ← tu nastavíš priehľadnosť (0.00 – 1.00) */
+    pointer-events: none;         /* aby overlay nezasahoval do klikov */
+    transform: rotate(-15deg);    /* uhol – môžeš zmeniť */
+    mix-blend-mode: normal;       /* môžeš dať multiply ak chceš “tlačený papierový” look */
+}
