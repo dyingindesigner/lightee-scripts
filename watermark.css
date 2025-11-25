@@ -2,7 +2,11 @@
    Lightee Watermark — Global
    =========================== */
 
-/* KATEGÓRIE (listing) */
+
+/* ===================================== */
+/*   A) KATEGÓRIE — obrázky v listingu   */
+/* ===================================== */
+
 .product .image {
     position: relative !important;
     overflow: hidden !important;
@@ -12,15 +16,20 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png") repeat;
-    background-size: 260px auto; /* uprav podľa potreby */
-    opacity: 0.22;               /* upraviteľné */
+    background-image: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
+    background-size: 55%;        /* veľkosť watermarku */
+    background-repeat: no-repeat;
+    background-position: center center;
+    opacity: 0.25;               /* upraviteľná intenzita */
     pointer-events: none;
-    z-index: 1;
+    z-index: 2;
 }
 
 
-/* DETAIL PRODUKTU */
+/* ===================================== */
+/*       B) DETAIL PRODUKTU — hlavný obrázok */
+/* ===================================== */
+
 .p-image-wrapper .p-image {
     position: relative !important;
     overflow: hidden !important;
@@ -30,23 +39,28 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png") repeat;
-    background-size: 300px auto;
-    opacity: 0.22;
+    background-image: url("https://cdn.myshoptet.com/usr/www.lightee.sk/user/logos/logo.png");
+    background-size: 50%;         /* veľkosť watermarku na detaile */
+    background-repeat: no-repeat;
+    background-position: center center;
+    opacity: 0.25;
     pointer-events: none;
     z-index: 2;
 }
 
 
-/* TEXTY, CENY, TLAČIDLÁ NAD WATERMARKOM */
+/* ===================================== */
+/*    VŠETKY TEXTY, FLAGY, CENY NAD WM   */
+/* ===================================== */
+
 .product .p-in,
 .product .p-bottom,
 .product .flags,
-.p-image-wrapper,
 .price,
 .availability,
 .p-desc,
-.name {
+.name,
+.p-image-wrapper + * {
     position: relative !important;
     z-index: 5 !important;
 }
