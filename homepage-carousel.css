@@ -1,0 +1,67 @@
+/* === HOMEPAGE CAROUSEL - Najpredávanejšie produkty === */
+
+#products-4 {
+  display: flex !important;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 20px 0 40px;
+}
+
+/* ZMENŠENIE PRODUKTOV NA 30–35 % */
+#products-4 .product {
+  flex: 0 0 30%;
+  max-width: 30%;
+  transform: scale(0.95);
+  box-sizing: border-box;
+}
+
+/* TABLET */
+@media (max-width: 1024px) {
+  #products-4 .product {
+    flex: 0 0 45%;
+    max-width: 45%;
+  }
+}
+
+/* MOBIL */
+@media (max-width: 768px) {
+  #products-4 .product {
+    flex: 0 0 85%;
+    max-width: 85%;
+  }
+}
+
+/* SKRYJE ZBYTOČNÉ DLHÉ POPISY */
+#products-4 .p-desc {
+  display: none;
+}
+
+/* === SIPKY === */
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #000;
+  color: #fff;
+  border: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 99;
+  opacity: 0.75;
+}
+
+.carousel-btn:hover {
+  opacity: 1;
+}
+
+.carousel-prev {
+  left: -20px;
+}
+
+.carousel-next {
+  right: -20px;
+}
