@@ -1,67 +1,70 @@
-/* === HOMEPAGE CAROUSEL - Najpredávanejšie produkty === */
+/* === FORCE CAROUSEL MODE - SHOPTET OVERRIDE === */
 
 #products-4 {
   display: flex !important;
-  gap: 16px;
-  overflow-x: auto;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
   scroll-behavior: smooth;
+  gap: 20px;
   padding: 20px 0 40px;
+  width: 100%;
 }
 
-/* ZMENŠENIE PRODUKTOV NA 30–35 % */
+/* ZRUŠENIE SHOPTET GRIDU */
 #products-4 .product {
-  flex: 0 0 30%;
-  max-width: 30%;
-  transform: scale(0.95);
-  box-sizing: border-box;
+  float: none !important;
+  display: block !important;
+  flex: 0 0 30% !important;
+  max-width: 30% !important;
+  min-width: 30% !important;
+  transform: scale(0.9);
+  box-sizing: border-box !important;
 }
 
 /* TABLET */
 @media (max-width: 1024px) {
   #products-4 .product {
-    flex: 0 0 45%;
-    max-width: 45%;
+    flex: 0 0 45% !important;
+    max-width: 45% !important;
+    min-width: 45% !important;
   }
 }
 
 /* MOBIL */
 @media (max-width: 768px) {
   #products-4 .product {
-    flex: 0 0 85%;
-    max-width: 85%;
+    flex: 0 0 85% !important;
+    max-width: 85% !important;
+    min-width: 85% !important;
   }
 }
 
-/* SKRYJE ZBYTOČNÉ DLHÉ POPISY */
+/* SKRYŤ POPIS */
 #products-4 .p-desc {
-  display: none;
+  display: none !important;
 }
 
-/* === SIPKY === */
+/* === ŠIPKY === */
 
 .carousel-btn {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: #000;
+  background: #222;
   color: #fff;
   border: none;
   width: 42px;
   height: 42px;
   border-radius: 50%;
   cursor: pointer;
-  z-index: 99;
-  opacity: 0.75;
-}
-
-.carousel-btn:hover {
-  opacity: 1;
+  z-index: 9999;
+  opacity: 0.85;
 }
 
 .carousel-prev {
-  left: -20px;
+  left: -18px;
 }
 
 .carousel-next {
-  right: -20px;
+  right: -18px;
 }
