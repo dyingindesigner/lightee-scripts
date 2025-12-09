@@ -1,19 +1,21 @@
-<script>
-window.addEventListener("scroll", function () {
+document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("backToTop");
+  const header = document.querySelector(".header-top");
 
-  if (window.scrollY > 300) {
-    btn.classList.add("visible");
-  } else {
-    btn.classList.remove("visible");
-  }
-});
+  if (!btn || !header) return;
 
-document.getElementById("backToTop").addEventListener("click", function (e) {
-  e.preventDefault();
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
+  // ZOBRAZENIE ŠÍPKY PRI SCROLLE
+  window.addEventListener("scroll", function () {
+    if (window.scrollY > 300) {
+      btn.classList.add("visible");
+    } else {
+      btn.classList.remove("visible");
+    }
+  });
+
+  // SCROLL NA HEADER
+  btn.addEventListener("click", function (e) {
+    e.preventDefault();
+    header.scrollIntoView({ behavior: "smooth" });
   });
 });
-</script>
