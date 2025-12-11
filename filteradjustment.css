@@ -1,32 +1,30 @@
-/* Make the wrapper behave like a proper multi-line filter item */
-.filter-section .parameter-value,
+/* 1. Force the wrapping container to block layout (kills unwanted flex) */
 .filter-section .parameter-values > div,
-.filter-section .parameter-values .filter-label {
+.filter-section .parameter-value,
+.filter-section .filters-inner div {
     display: block !important;
+    width: 100% !important;
 }
 
-/* Checkbox must not reserve horizontal space for the text */
-.filter-section .parameter-value input[type="checkbox"],
+/* 2. Float checkbox so it does not force single-line flex alignment */
 .filter-section input[type="checkbox"] {
     float: left !important;
-    margin-top: 3px;
-    margin-right: 8px;
+    margin-top: 3px !important;
+    margin-right: 8px !important;
 }
 
-/* The label becomes a block that wraps under itself */
+/* 3. Make label wrap */
 .filter-section .filter-label {
     display: block !important;
-    white-space: normal !important;
-    overflow-wrap: anywhere !important;
-    word-break: break-word !important;
-
-    /* indent wrapped lines so they don't fall under the checkbox */
     padding-left: 26px !important;
-    line-height: 1.35;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    line-height: 1.35 !important;
 }
 
-/* Count badge stays aligned and never breaks text wrapping */
+/* 4. Keep the count bubble neat */
 .filter-section .filter-label .filter-count {
-    white-space: nowrap;
-    margin-left: 6px;
+    white-space: nowrap !important;
+    margin-left: 6px !important;
 }
