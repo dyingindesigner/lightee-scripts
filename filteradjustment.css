@@ -1,17 +1,13 @@
-/* Make filter labels wrap correctly inside Shoptet flex layout */
-.filter-section .parameter-values label {
-    display: flex !important;
-    align-items: flex-start !important;
-    flex-wrap: wrap !important;
-    white-space: normal !important;
-    overflow-wrap: anywhere !important;
-}
-
-/* Ensure the text span inside the label can wrap */
-.filter-section .parameter-values label span,
+/* Prevent long filter names and values from overflowing */
+.filter-section .parameter-name,
+.filter-section .parameter-values label,
 .filter-section .parameter-values .value {
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
-    flex: 1 1 auto !important;
+}
+
+/* Ensure no horizontal scrolling occurs */
+.filter-section {
+    overflow-x: hidden !important;
 }
