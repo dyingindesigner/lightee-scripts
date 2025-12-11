@@ -1,0 +1,13 @@
+/* Prevent long filter names and values from overflowing */
+.filter-section .parameter-name,
+.filter-section .parameter-values label,
+.filter-section .parameter-values .value {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+/* Ensure no horizontal scrolling occurs */
+.filter-section {
+    overflow-x: hidden !important;
+}
