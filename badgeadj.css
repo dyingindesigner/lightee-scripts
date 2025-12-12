@@ -1,0 +1,18 @@
+/* Ensure discount flag stays red */
+.flags-extra .flag.flag-discount {
+    background-color: #e60000;
+    line-height: 1.15;
+}
+
+/* Emphasize the percentage */
+.flags-extra .flag.flag-discount .price-save {
+    font-size: 20px;      /* slightly larger than 18px */
+    font-weight: 800;
+    margin-top: 2px;
+}
+
+/* Slightly reduce standard price for contrast */
+.flags-extra .flag.flag-discount .price-standard {
+    font-size: 16px;
+    opacity: 0.9;
+}
