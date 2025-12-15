@@ -1,23 +1,19 @@
-#backToTop {
-  position: fixed;
-  bottom: 25px;
-  right: 25px;
-  width: 46px;
-  height: 46px;
-  background: #222;
-  color: #fff;
-  font-size: 24px;
-  line-height: 46px;
-  text-align: center;
-  border-radius: 50%;
-  text-decoration: none;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-  z-index: 99999;
-}
-
-#backToTop.visible {
-  opacity: 0.9;
-  pointer-events: auto;
+@@ -0,0 +1,18 @@
+/* Lightee – Badge Style */
+.lightee-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #0a84ff;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 99999;
 }
