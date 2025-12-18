@@ -19,7 +19,7 @@
         <h3>Získajte 5 % zľavu</h3>
         <p>
           Zaregistrujte sa a po registrácii automaticky získate
-          <strong>5 % zľavu</strong> na svoj prvý nákup.
+          <strong>5 % zľavu</strong> na celý sortiment.
         </p>
         <a href="${prestashop.urls.pages.register}" class="btn btn-primary">
           Registrovať sa
