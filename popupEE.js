@@ -1,4 +1,5 @@
 /* ElectroEnergy – registration popup */
+// EE POPUP VERSION 1.0.2
 
 (function () {
   if (!window.prestashop) return;
