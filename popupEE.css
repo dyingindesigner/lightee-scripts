@@ -1,1 +1,43 @@
+/* ElectroEnergy – registration popup */
+
+#ee-register-popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: none;
+  z-index: 9999;
+}
+
+#ee-register-popup .popup-box {
+  background: #ffffff;
+  max-width: 420px;
+  margin: 10% auto;
+  padding: 28px 26px;
+  text-align: center;
+  position: relative;
+  border-radius: 6px;
+}
+
+#ee-register-popup .popup-box h3 {
+  margin-bottom: 10px;
+}
+
+#ee-register-popup .popup-box p {
+  margin-bottom: 18px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+#ee-register-popup .popup-box .close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+#ee-register-popup .popup-box .btn {
+  padding: 10px 22px;
+}
 
