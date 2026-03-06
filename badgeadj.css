@@ -9,9 +9,11 @@
     /* slightly larger than 18px */
     font-weight: 600;
     margin-top: 2px;
+    font-size: 16px;
 }
 
 /* Slightly reduce standard price for contrast */
 .flags-extra .flag.flag-discount .price-standard {
     opacity: 0.9;
+    font-size: 12px;
 }
