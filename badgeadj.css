@@ -6,13 +6,12 @@
 
 /* Emphasize the percentage */
 .flags-extra .flag.flag-discount .price-save {
-    font-size: 16px;      /* slightly larger than 18px */
+    /* slightly larger than 18px */
     font-weight: 800;
     margin-top: 2px;
 }
 
 /* Slightly reduce standard price for contrast */
 .flags-extra .flag.flag-discount .price-standard {
-    font-size: 12px;
     opacity: 0.9;
 }
