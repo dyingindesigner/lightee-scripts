@@ -13,6 +13,6 @@
 
 /* Slightly reduce standard price for contrast */
 .flags-extra .flag.flag-discount .price-standard {
-    font-size: 16px;
+    font-size: 14px;
     opacity: 0.9;
 }
