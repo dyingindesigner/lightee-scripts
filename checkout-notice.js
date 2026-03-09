@@ -9,9 +9,9 @@
 
   .shipping-slovakia-only-notice-inner {
     padding: 12px 14px;
-    border: 1px solid #d9d9d9;
+    border: 1px solid #f1b5b5;
     border-radius: 10px;
-    background: #f6f6f6;
+    background: linear-gradient(180deg,#fff5f5 0%,#ffecec 100%);
     width: 100%;
     box-sizing: border-box;
   }
@@ -21,14 +21,15 @@
     font-size: 14px;
     line-height: 1.35;
     margin-bottom: 4px;
-    color: #3b3b3b;
+    color: #a61b1b;
+    font-weight: 700;
   }
 
   .shipping-slovakia-only-notice-text span {
     display: block;
     font-size: 13px;
     line-height: 1.45;
-    color: #666;
+    color: #7a2c2c;
   }
 
   @media (max-width: 768px) {
