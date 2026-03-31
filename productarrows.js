@@ -69,7 +69,7 @@ function card(btn) {
 
 function listingButton(btn) {
   if (!btn || btn.dataset.eeQtyReady === '1') return false;
-  if (!/do ko[sš]íka/i.test((btn.textContent || '').replace(/\s+/g, ' ').trim())) return false;
+  if (!/do ko[sš]íka/i.test(n(btn.textContent))) return false;
   if (btn.closest('#cart-widget,.cart-widget,.cart-table,.order-summary-top,#checkoutSidebar,.p-detail-inner,.product-detail,.type-detail,.extras-col')) return false;
   return !!card(btn);
 }
@@ -145,7 +145,6 @@ function fallbackQtyHandlers(box, cfg) {
 
   if (minus) minus.addEventListener('click', function (e) {
     if (!isB2B()) return;
-    if (e.__eeDone) return;
     e.preventDefault();
     e.stopPropagation();
     setQty(box, num(box.dataset.qty, cfg.min) - cfg.step, cfg);
@@ -153,7 +152,6 @@ function fallbackQtyHandlers(box, cfg) {
 
   if (plus) plus.addEventListener('click', function (e) {
     if (!isB2B()) return;
-    if (e.__eeDone) return;
     e.preventDefault();
     e.stopPropagation();
     setQty(box, num(box.dataset.qty, cfg.min) + cfg.step, cfg);
@@ -262,3 +260,6 @@ function boot() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', boot);
 } else {
+  boot();
+}
+})();
