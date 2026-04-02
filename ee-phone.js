@@ -187,7 +187,6 @@
 
         var originalSelect = getOriginalSelect(form);
         var retailGroup = getRetailGroup(form);
-        var retailSelect = getRetailSelect(form);
 
         if (!retailGroup || !originalSelect || retailGroup.dataset.eeOptionsSynced === "1") return;
 
