@@ -3,21 +3,17 @@
     var PHONE_ID = "ee-retail-phone";
     var PHONE_CODE_ID = "ee-retail-phone-code";
 
-    function isVisible(el) {
-        if (!el) return false;
-        var style = window.getComputedStyle(el);
-        return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length) &&
-            style.display !== "none" &&
-            style.visibility !== "hidden";
-    }
-
     function getForm() {
         return document.querySelector("#register-form");
     }
 
-    function getRetailBirthdateGroup(form) {
+    function getBirthdateGroup(form) {
         var birthdate = form && form.querySelector('input[name="birthdate"]');
         return birthdate ? birthdate.closest(".form-group") : null;
+    }
+
+    function getOriginalPhoneGroup(form) {
+        return form && form.querySelector("#additionalInformation .phone-form-group");
     }
 
     function getOriginalPhoneInput(form) {
@@ -28,8 +24,12 @@
         return form && form.querySelector('#additionalInformation select[name="phoneCode"]');
     }
 
+    function getRetailPhoneGroup(form) {
+        return form && form.querySelector("." + INSERTED_CLASS);
+    }
+
     function getWholesaleRadio(form) {
-        return form && form.querySelector('#velkoobchodny-odberatel');
+        return form && form.querySelector("#velkoobchodny-odberatel");
     }
 
     function isWholesaleSelected(form) {
@@ -37,157 +37,156 @@
         return !!(wholesale && wholesale.checked);
     }
 
-    function ensureError(wrapper) {
-        var error = wrapper.querySelector('.js-validator-msg[data-type="validatorRequired"]');
-        if (!error) {
-            error = document.createElement("div");
-            error.className = "js-validator-msg msg-error";
-            error.setAttribute("data-type", "validatorRequired");
-            error.textContent = "Povinné pole";
-            error.style.display = "none";
-            wrapper.appendChild(error);
+    function setRequiredError(group, visible) {
+        var error = group && group.querySelector('.js-validator-msg[data-type="validatorRequired"]');
+        if (error) {
+            error.style.display = visible ? "block" : "none";
         }
-        return error;
     }
 
     function createRetailPhoneGroup(form) {
-        var originalPhoneCode = getOriginalPhoneCode(form);
-        var selectedValue = originalPhoneCode && originalPhoneCode.value
-            ? originalPhoneCode.value
-            : '{"phoneCode":"+421","countryCode":"SK","countryId":"151"}';
+        var originalGroup = getOriginalPhoneGroup(form);
+        if (!originalGroup) return null;
 
-        var wrapper = document.createElement("div");
-        wrapper.className = "form-group phone-form-group js-validated-element-wrapper smart-label-wrapper " + INSERTED_CLASS;
+        var clone = originalGroup.cloneNode(true);
+        var cloneInput = clone.querySelector('input[name="phone"], input#phone');
+        var cloneCode = clone.querySelector('select[name="phoneCode"]');
+        var cloneLabel = clone.querySelector('label');
 
-        wrapper.innerHTML = `
-            <label for="${PHONE_ID}">
-                <span class="required-asterisk">Telefón *</span>
-            </label>
-            <div class="phone-combined-input" style="display:flex;gap:8px;align-items:stretch;">
-                <select id="${PHONE_CODE_ID}" class="js-phone-code form-control" style="max-width:180px;">
-                    <option value='{"phoneCode":"+421","countryCode":"SK","countryId":"151"}'>Slovensko +421</option>
-                </select>
-                <input
-                    type="tel"
-                    id="${PHONE_ID}"
-                    class="form-control js-validate js-validate-phone js-validate-required"
-                    autocomplete="tel"
-                    inputmode="tel"
-                    required
-                >
-            </div>
-        `;
+        clone.classList.add(INSERTED_CLASS);
 
-        var retailInput = wrapper.querySelector("#" + PHONE_ID);
-        var retailCode = wrapper.querySelector("#" + PHONE_CODE_ID);
+        if (cloneLabel) {
+            cloneLabel.setAttribute("for", PHONE_ID);
+        }
+
+        if (cloneInput) {
+            cloneInput.id = PHONE_ID;
+            cloneInput.name = "eeRetailPhone";
+            cloneInput.value = "";
+            cloneInput.required = true;
+            cloneInput.autocomplete = "tel";
+        }
+
+        if (cloneCode) {
+            cloneCode.id = PHONE_CODE_ID;
+            cloneCode.name = "eeRetailPhoneCode";
+        }
+
+        setRequiredError(clone, false);
+
         var originalInput = getOriginalPhoneInput(form);
-        var error = ensureError(wrapper);
+        var originalCode = getOriginalPhoneCode(form);
 
-        retailCode.value = selectedValue;
-        if (originalInput && originalInput.value) {
-            retailInput.value = originalInput.value;
+        if (cloneInput && originalInput && originalInput.value) {
+            cloneInput.value = originalInput.value;
+        }
+
+        if (cloneCode && originalCode && originalCode.value) {
+            cloneCode.value = originalCode.value;
         }
 
         function syncToOriginal() {
-            if (originalInput) {
-                originalInput.value = retailInput.value || "";
-                originalInput.classList.add("js-validate", "js-validate-phone", "js-validate-required");
-                originalInput.classList.remove("js-validation-suspended");
+            if (originalInput && cloneInput) {
+                originalInput.value = cloneInput.value || "";
                 originalInput.required = true;
             }
-            if (originalPhoneCode) {
-                originalPhoneCode.value = retailCode.value;
+            if (originalCode && cloneCode) {
+                originalCode.value = cloneCode.value;
             }
         }
 
         function validate() {
+            if (isWholesaleSelected(form)) {
+                setRequiredError(clone, false);
+                return true;
+            }
             syncToOriginal();
-            var ok = !!(retailInput.value || "").trim();
-            error.style.display = ok ? "none" : "block";
-            retailInput.classList.toggle("error", !ok);
+            var ok = !!(cloneInput && cloneInput.value && cloneInput.value.trim());
+            setRequiredError(clone, !ok);
+            if (cloneInput) {
+                cloneInput.classList.toggle("error", !ok);
+            }
             return ok;
         }
 
-        retailInput.addEventListener("input", validate);
-        retailInput.addEventListener("blur", validate);
-        retailCode.addEventListener("change", syncToOriginal);
+        if (cloneInput) {
+            cloneInput.addEventListener("input", validate);
+            cloneInput.addEventListener("blur", validate);
+        }
 
-        wrapper._validateRetailPhone = validate;
-        wrapper._syncRetailPhone = syncToOriginal;
+        if (cloneCode) {
+            cloneCode.addEventListener("change", syncToOriginal);
+        }
 
-        return wrapper;
+        clone._syncRetailPhone = syncToOriginal;
+        clone._validateRetailPhone = validate;
+
+        return clone;
     }
 
-    function insertRetailPhone() {
+    function ensureRetailPhone() {
         var form = getForm();
         if (!form) return;
 
-        var birthdateGroup = getRetailBirthdateGroup(form);
+        var birthdateGroup = getBirthdateGroup(form);
         if (!birthdateGroup) return;
 
-        var existingRetail = form.querySelector("." + INSERTED_CLASS);
-        if (!existingRetail) {
-            existingRetail = createRetailPhoneGroup(form);
-            birthdateGroup.after(existingRetail);
+        var retailGroup = getRetailPhoneGroup(form);
+        if (!retailGroup) {
+            retailGroup = createRetailPhoneGroup(form);
+            if (!retailGroup) return;
+            birthdateGroup.after(retailGroup);
         }
 
-        if (!existingRetail.dataset.eePhoneSubmitBound) {
-            existingRetail.dataset.eePhoneSubmitBound = "1";
+        if (!form.dataset.eePhoneSubmitBound) {
+            form.dataset.eePhoneSubmitBound = "1";
             form.addEventListener("submit", function (e) {
-                var retailBlock = form.querySelector("." + INSERTED_CLASS);
-                if (!retailBlock || !isVisible(retailBlock)) return;
-                if (!retailBlock._validateRetailPhone || !retailBlock._validateRetailPhone()) {
+                var retail = getRetailPhoneGroup(form);
+                if (!retail || isWholesaleSelected(form)) return;
+                if (retail._validateRetailPhone && !retail._validateRetailPhone()) {
                     e.preventDefault();
                     e.stopPropagation();
-                    var input = retailBlock.querySelector("#" + PHONE_ID);
+                    var input = retail.querySelector("#" + PHONE_ID);
                     if (input) input.focus();
                 }
             }, true);
         }
     }
 
-    function updateVisibility() {
+    function updatePhoneVisibility() {
         var form = getForm();
         if (!form) return;
 
-        var retailBlock = form.querySelector("." + INSERTED_CLASS);
-        var originalPhoneGroup = form.querySelector('#additionalInformation .phone-form-group');
+        var retailGroup = getRetailPhoneGroup(form);
+        var originalGroup = getOriginalPhoneGroup(form);
         var wholesale = isWholesaleSelected(form);
 
-        if (retailBlock) {
-            retailBlock.style.display = wholesale ? "none" : "";
+        if (retailGroup) {
+            retailGroup.style.display = wholesale ? "none" : "";
+            if (!wholesale && retailGroup._syncRetailPhone) {
+                retailGroup._syncRetailPhone();
+            }
         }
 
-        if (originalPhoneGroup) {
-            originalPhoneGroup.style.display = wholesale ? "" : "none";
+        if (originalGroup) {
+            originalGroup.style.display = wholesale ? "" : "none";
         }
     }
 
+    function run() {
+        ensureRetailPhone();
+        updatePhoneVisibility();
+    }
+
     function boot() {
-        insertRetailPhone();
-        updateVisibility();
+        run();
+        setTimeout(run, 300);
+        setTimeout(run, 1000);
+        setTimeout(run, 2000);
 
-        setTimeout(function () {
-            insertRetailPhone();
-            updateVisibility();
-        }, 400);
-
-        setTimeout(function () {
-            insertRetailPhone();
-            updateVisibility();
-        }, 1200);
-
-        setTimeout(function () {
-            insertRetailPhone();
-            updateVisibility();
-        }, 2500);
-
-        var observer = new MutationObserver(function () {
-            insertRetailPhone();
-            updateVisibility();
-        });
-
-        observer.observe(document.body, {
+        new MutationObserver(function () {
+            run();
+        }).observe(document.body, {
             childList: true,
             subtree: true,
             attributes: true,
