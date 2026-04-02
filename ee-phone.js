@@ -12,6 +12,10 @@
         return birthdate ? birthdate.closest(".form-group") : null;
     }
 
+    function getRetailPhoneGroup(form) {
+        return form && form.querySelector("." + INSERTED_CLASS);
+    }
+
     function getOriginalPhoneGroup(form) {
         return form && form.querySelector("#additionalInformation .phone-form-group");
     }
@@ -24,10 +28,6 @@
         return form && form.querySelector('#additionalInformation select[name="phoneCode"]');
     }
 
-    function getRetailPhoneGroup(form) {
-        return form && form.querySelector("." + INSERTED_CLASS);
-    }
-
     function getWholesaleRadio(form) {
         return form && form.querySelector("#velkoobchodny-odberatel");
     }
@@ -37,91 +37,119 @@
         return !!(wholesale && wholesale.checked);
     }
 
-    function setRequiredError(group, visible) {
-        var error = group && group.querySelector('.js-validator-msg[data-type="validatorRequired"]');
-        if (error) {
-            error.style.display = visible ? "block" : "none";
-        }
+    function buildFallbackRetailGroup() {
+        var wrapper = document.createElement("div");
+        wrapper.className = "form-group phone-form-group js-phone-form-group js-validated-element-wrapper smart-label-wrapper " + INSERTED_CLASS;
+
+        wrapper.innerHTML = `
+            <label for="${PHONE_ID}">
+                <span class="required-asterisk">Telefón *</span>
+            </label>
+            <div class="phone-combined-input">
+                <select id="${PHONE_CODE_ID}" name="eeRetailPhoneCode" class="js-phone-code">
+                    <option value='{"phoneCode":"+421","countryCode":"SK","countryId":"151"}' selected>Slovensko +421</option>
+                    <option value='{"phoneCode":"+420","countryCode":"CZ","countryId":"58"}'>Česko +420</option>
+                    <option value='{"phoneCode":"+36","countryCode":"HU","countryId":"99"}'>Maďarsko +36</option>
+                    <option value='{"phoneCode":"+49","countryCode":"DE","countryId":"82"}'>Nemecko +49</option>
+                    <option value='{"phoneCode":"+48","countryCode":"PL","countryId":"164"}'>Poľsko +48</option>
+                    <option value='{"phoneCode":"+43","countryCode":"AT","countryId":"14"}'>Rakúsko +43</option>
+                </select>
+                <input
+                    type="tel"
+                    id="${PHONE_ID}"
+                    name="eeRetailPhone"
+                    class="form-control js-phone-form-control js-validate js-validate-phone js-validate-required"
+                    autocomplete="tel"
+                    inputmode="tel"
+                    required
+                >
+            </div>
+            <div class="js-validator-msg msg-error" data-type="validatorRequired" style="display:none;">Povinné pole</div>
+        `;
+
+        return wrapper;
     }
 
-    function createRetailPhoneGroup(form) {
+    function enhanceRetailGroupFromOriginal(form, retailGroup) {
         var originalGroup = getOriginalPhoneGroup(form);
-        if (!originalGroup) return null;
+        if (!originalGroup || !retailGroup || retailGroup.dataset.eeEnhanced === "1") return;
 
-        var clone = originalGroup.cloneNode(true);
-        var cloneInput = clone.querySelector('input[name="phone"], input#phone');
-        var cloneCode = clone.querySelector('select[name="phoneCode"]');
-        var cloneLabel = clone.querySelector('label');
+        var retailSelect = retailGroup.querySelector("#" + PHONE_CODE_ID);
+        var retailInput = retailGroup.querySelector("#" + PHONE_ID);
 
-        clone.classList.add(INSERTED_CLASS);
+        var originalSelect = originalGroup.querySelector('select[name="phoneCode"]');
+        var originalLabel = originalGroup.querySelector("label");
+        var originalError = originalGroup.querySelector('.js-validator-msg[data-type="validatorRequired"]');
 
-        if (cloneLabel) {
-            cloneLabel.setAttribute("for", PHONE_ID);
+        if (originalLabel) {
+            var retailLabel = retailGroup.querySelector("label");
+            if (retailLabel) {
+                retailLabel.innerHTML = originalLabel.innerHTML;
+                retailLabel.setAttribute("for", PHONE_ID);
+            }
         }
 
-        if (cloneInput) {
-            cloneInput.id = PHONE_ID;
-            cloneInput.name = "eeRetailPhone";
-            cloneInput.value = "";
-            cloneInput.required = true;
-            cloneInput.autocomplete = "tel";
+        if (originalSelect && retailSelect) {
+            var newSelect = originalSelect.cloneNode(true);
+            newSelect.id = PHONE_CODE_ID;
+            newSelect.name = "eeRetailPhoneCode";
+            retailSelect.replaceWith(newSelect);
         }
 
-        if (cloneCode) {
-            cloneCode.id = PHONE_CODE_ID;
-            cloneCode.name = "eeRetailPhoneCode";
+        if (originalError) {
+            var retailError = retailGroup.querySelector('.js-validator-msg[data-type="validatorRequired"]');
+            if (retailError) {
+                retailError.className = originalError.className;
+                retailError.innerHTML = originalError.innerHTML;
+                retailError.style.display = "none";
+            }
         }
 
-        setRequiredError(clone, false);
+        if (retailInput) {
+            retailInput.className = "form-control js-phone-form-control js-validate js-validate-phone js-validate-required";
+        }
 
+        retailGroup.dataset.eeEnhanced = "1";
+    }
+
+    function syncRetailToOriginal(form) {
+        var retailGroup = getRetailPhoneGroup(form);
+        if (!retailGroup) return;
+
+        var retailInput = retailGroup.querySelector("#" + PHONE_ID);
+        var retailCode = retailGroup.querySelector("#" + PHONE_CODE_ID);
         var originalInput = getOriginalPhoneInput(form);
         var originalCode = getOriginalPhoneCode(form);
 
-        if (cloneInput && originalInput && originalInput.value) {
-            cloneInput.value = originalInput.value;
+        if (originalInput && retailInput) {
+            originalInput.value = retailInput.value || "";
+            originalInput.required = true;
         }
 
-        if (cloneCode && originalCode && originalCode.value) {
-            cloneCode.value = originalCode.value;
+        if (originalCode && retailCode) {
+            originalCode.value = retailCode.value;
+        }
+    }
+
+    function validateRetail(form) {
+        var retailGroup = getRetailPhoneGroup(form);
+        if (!retailGroup || isWholesaleSelected(form)) return true;
+
+        var retailInput = retailGroup.querySelector("#" + PHONE_ID);
+        var error = retailGroup.querySelector('.js-validator-msg[data-type="validatorRequired"]');
+
+        syncRetailToOriginal(form);
+
+        var ok = !!(retailInput && retailInput.value && retailInput.value.trim());
+
+        if (error) {
+            error.style.display = ok ? "none" : "block";
+        }
+        if (retailInput) {
+            retailInput.classList.toggle("error", !ok);
         }
 
-        function syncToOriginal() {
-            if (originalInput && cloneInput) {
-                originalInput.value = cloneInput.value || "";
-                originalInput.required = true;
-            }
-            if (originalCode && cloneCode) {
-                originalCode.value = cloneCode.value;
-            }
-        }
-
-        function validate() {
-            if (isWholesaleSelected(form)) {
-                setRequiredError(clone, false);
-                return true;
-            }
-            syncToOriginal();
-            var ok = !!(cloneInput && cloneInput.value && cloneInput.value.trim());
-            setRequiredError(clone, !ok);
-            if (cloneInput) {
-                cloneInput.classList.toggle("error", !ok);
-            }
-            return ok;
-        }
-
-        if (cloneInput) {
-            cloneInput.addEventListener("input", validate);
-            cloneInput.addEventListener("blur", validate);
-        }
-
-        if (cloneCode) {
-            cloneCode.addEventListener("change", syncToOriginal);
-        }
-
-        clone._syncRetailPhone = syncToOriginal;
-        clone._validateRetailPhone = validate;
-
-        return clone;
+        return ok;
     }
 
     function ensureRetailPhone() {
@@ -133,27 +161,34 @@
 
         var retailGroup = getRetailPhoneGroup(form);
         if (!retailGroup) {
-            retailGroup = createRetailPhoneGroup(form);
-            if (!retailGroup) return;
+            retailGroup = buildFallbackRetailGroup();
             birthdateGroup.after(retailGroup);
+
+            retailGroup.addEventListener("input", function () {
+                validateRetail(form);
+            });
+
+            retailGroup.addEventListener("change", function () {
+                syncRetailToOriginal(form);
+            });
         }
+
+        enhanceRetailGroupFromOriginal(form, retailGroup);
 
         if (!form.dataset.eePhoneSubmitBound) {
             form.dataset.eePhoneSubmitBound = "1";
             form.addEventListener("submit", function (e) {
-                var retail = getRetailPhoneGroup(form);
-                if (!retail || isWholesaleSelected(form)) return;
-                if (retail._validateRetailPhone && !retail._validateRetailPhone()) {
+                if (!validateRetail(form)) {
                     e.preventDefault();
                     e.stopPropagation();
-                    var input = retail.querySelector("#" + PHONE_ID);
+                    var input = form.querySelector("#" + PHONE_ID);
                     if (input) input.focus();
                 }
             }, true);
         }
     }
 
-    function updatePhoneVisibility() {
+    function updateVisibility() {
         var form = getForm();
         if (!form) return;
 
@@ -163,19 +198,20 @@
 
         if (retailGroup) {
             retailGroup.style.display = wholesale ? "none" : "";
-            if (!wholesale && retailGroup._syncRetailPhone) {
-                retailGroup._syncRetailPhone();
-            }
         }
 
         if (originalGroup) {
             originalGroup.style.display = wholesale ? "" : "none";
         }
+
+        if (!wholesale) {
+            syncRetailToOriginal(form);
+        }
     }
 
     function run() {
         ensureRetailPhone();
-        updatePhoneVisibility();
+        updateVisibility();
     }
 
     function boot() {
