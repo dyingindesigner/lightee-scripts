@@ -1,15 +1,18 @@
 (function () {
-    var FORM_MARKER = "data-ee-phone-enhanced";
+    var PHONE_ID = "custom-registration-phone";
 
-    function log() {
-        try { console.log.apply(console, ["[ee-phone]"].concat([].slice.call(arguments))); } catch (e) {}
+    function isVisible(el) {
+        if (!el) return false;
+        if (!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)) return false;
+        var style = window.getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden";
     }
 
     function createPhoneGroup() {
         var wrapper = document.createElement("div");
-        wrapper.className = "form-group phone-form-group js-phone-form-group js-validated-element-wrapper smart-label-wrapper";
+        wrapper.className = "form-group phone-form-group js-phone-form-group js-validated-element-wrapper smart-label-wrapper ee-phone-inserted";
         wrapper.innerHTML = `
-            <label for="custom-registration-phone">
+            <label for="${PHONE_ID}">
                 <span class="required-asterisk">Telefón *</span>
             </label>
             <div class="phone-combined-input" style="display:flex;gap:8px;align-items:stretch;">
@@ -20,7 +23,7 @@
                     type="tel"
                     value=""
                     name="phone"
-                    id="custom-registration-phone"
+                    id="${PHONE_ID}"
                     class="form-control js-phone-form-control js-validate js-validate-phone js-validate-required"
                     autocomplete="tel"
                     inputmode="tel"
@@ -31,7 +34,7 @@
         `;
 
         var input = wrapper.querySelector('input[name="phone"]');
-        var error = wrapper.querySelector(".js-validator-msg");
+        var error = wrapper.querySelector('.js-validator-msg');
 
         function validate() {
             var ok = !!(input.value || "").trim();
@@ -42,105 +45,96 @@
 
         input.addEventListener("blur", validate);
         input.addEventListener("input", validate);
-
         wrapper._validatePhoneField = validate;
+
         return wrapper;
     }
 
-    function getInsertTarget(form) {
-        var selectors = [
-            'input[name="birthdate"]',
-            'input[id*="birth"]',
-            'input[name*="birth"]',
-            'input[name="email"]',
-            'input[type="email"]',
-            'input[name="surname"]',
-            'input[name="name"]',
-            'input[name="billingSurname"]',
-            'input[name="billingName"]'
-        ];
-
-        for (var i = 0; i < selectors.length; i++) {
-            var el = form.querySelector(selectors[i]);
-            if (el) {
-                var group = el.closest(".form-group") || el.closest(".co-box") || el.parentElement;
-                if (group) return group;
-            }
+    function getVisibleBirthdate() {
+        var birthdates = document.querySelectorAll('#register-form input[name="birthdate"]');
+        for (var i = 0; i < birthdates.length; i++) {
+            if (isVisible(birthdates[i])) return birthdates[i];
         }
-
         return null;
     }
 
-    function isRegistrationForm(form) {
-        if (!form) return false;
-        var text = (form.innerText || "").toLowerCase();
-        return (
-            text.indexOf("dátum narodenia") > -1 ||
-            text.indexOf("meno a priezvisko") > -1 ||
-            text.indexOf("registrova") > -1 ||
-            text.indexOf("registrácia") > -1
-        );
+    function getSectionRoot(birthdate) {
+        if (!birthdate) return null;
+
+        var group = birthdate.closest('.form-group');
+        if (!group) return null;
+
+        var node = group.parentElement;
+        while (node && node.id !== "register-form") {
+            if (node.querySelectorAll('.form-group').length >= 3 && isVisible(node)) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+
+        return group.parentElement || birthdate.closest('#register-form');
     }
 
-    function enhanceForm(form) {
-        if (!form || form.getAttribute(FORM_MARKER) === "1") return;
-        if (!isRegistrationForm(form)) return;
-
-        var existingPhone = form.querySelector('input[name="phone"], input[type="tel"]');
-        if (existingPhone) {
-            log("phone already exists in form, skipping");
-            form.setAttribute(FORM_MARKER, "1");
-            return;
+    function hasVisiblePhone(root) {
+        if (!root) return false;
+        var phones = root.querySelectorAll('input[name="phone"], input[type="tel"]');
+        for (var i = 0; i < phones.length; i++) {
+            if (isVisible(phones[i])) return true;
         }
+        return false;
+    }
 
-        var target = getInsertTarget(form);
-        if (!target) {
-            log("no insert target found");
-            return;
-        }
+    function injectPhone() {
+        var birthdate = getVisibleBirthdate();
+        if (!birthdate) return;
+
+        var birthdateGroup = birthdate.closest('.form-group');
+        if (!birthdateGroup || !isVisible(birthdateGroup)) return;
+
+        var root = getSectionRoot(birthdate);
+        if (!root || !isVisible(root)) return;
+
+        if (root.querySelector('.ee-phone-inserted')) return;
+        if (hasVisiblePhone(root)) return;
 
         var phoneGroup = createPhoneGroup();
-        target.after(phoneGroup);
-        form.setAttribute(FORM_MARKER, "1");
-        log("phone inserted");
+        birthdateGroup.after(phoneGroup);
 
-        form.addEventListener("submit", function (e) {
-            var phoneInput = form.querySelector("#custom-registration-phone");
-            var phoneWrap = phoneInput && phoneInput.closest(".phone-form-group");
-            if (!phoneInput || !phoneWrap || !phoneWrap._validatePhoneField) return;
+        var form = birthdate.closest('form');
+        if (form && !form.dataset.eePhoneBound) {
+            form.dataset.eePhoneBound = "1";
+            form.addEventListener("submit", function (e) {
+                var visibleCustomPhone = document.querySelector('#' + PHONE_ID);
+                if (!visibleCustomPhone || !isVisible(visibleCustomPhone)) return;
 
-            if (!phoneWrap._validatePhoneField()) {
-                e.preventDefault();
-                e.stopPropagation();
-                phoneInput.focus();
-                log("blocked submit, phone empty");
-            }
-        }, true);
-    }
-
-    function scan() {
-        var forms = document.querySelectorAll("form");
-        for (var i = 0; i < forms.length; i++) {
-            enhanceForm(forms[i]);
+                var wrap = visibleCustomPhone.closest('.ee-phone-inserted');
+                if (wrap && wrap._validatePhoneField && !wrap._validatePhoneField()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    visibleCustomPhone.focus();
+                }
+            }, true);
         }
+
+        console.log("[ee-phone] phone inserted into visible retail section");
     }
 
     function boot() {
-        scan();
-        setTimeout(scan, 500);
-        setTimeout(scan, 1500);
-        setTimeout(scan, 3000);
+        injectPhone();
+        setTimeout(injectPhone, 400);
+        setTimeout(injectPhone, 1200);
+        setTimeout(injectPhone, 2500);
 
         var observer = new MutationObserver(function () {
-            scan();
+            injectPhone();
         });
 
         observer.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["class", "style"]
         });
-
-        log("booted");
     }
 
     if (document.readyState === "loading") {
