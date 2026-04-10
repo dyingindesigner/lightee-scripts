@@ -2,9 +2,22 @@
   function n(t) {
     return (t || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   }
+  /**
+   * Parsuje jednu cenu v SK formáte (medzery ako tisícky, desatinná čiarka): „12 059,30“, „59,30“, „1234“.
+   * Staré správanie bralo len prvé \d+ → pri „1 234,56“ vzniklo 1 € a zvyšok ostal v DOM (rozbité hlavičky košíka).
+   */
   function p(t) {
-    var m = n(t).match(/(\d+(?:[.,]\d{1,2})?)/);
-    return m ? parseFloat(m[1].replace(",", ".")) : null;
+    var s = n(t).replace(/\u20ac/g, "").trim();
+    if (!s) return null;
+    var m = s.match(/^([\d\s]+),(\d{1,2})$/);
+    if (m) {
+      var intPart = m[1].replace(/\s/g, "");
+      if (/^\d+$/.test(intPart)) return parseFloat(intPart + "." + m[2]);
+    }
+    var compact = s.replace(/\s/g, "");
+    if (/^\d+(,\d{1,2})?$/.test(compact)) return parseFloat(compact.replace(",", "."));
+    var m2 = s.match(/(\d+(?:[.,]\d{1,2})?)/);
+    return m2 ? parseFloat(m2[1].replace(",", ".")) : null;
   }
   function f(v) {
     return v == null ? "" : "\u20ac" + v.toLocaleString("sk-SK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -88,8 +101,8 @@
     var gross = resolveGrossFromPriceEl(el, txt);
     if (gross == null) return;
 
-    var next = txt.replace(/\u20ac\s*\d+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?\s*\u20ac/i, f(gross / 1.23));
-    if (next === txt) return;
+    var next = f(gross / 1.23);
+    if (n(el.textContent) === n(next)) return;
 
     el.textContent = next;
     el.dataset.eeRendered = n(next);
