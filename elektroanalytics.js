@@ -11,7 +11,8 @@
  *       siteKey: "elektroenergy",
  *       ingestSecret: "rovnaké ako ANALYTICS_INGEST_SECRET vo funkcii",
  *       supabaseAnonKey: "anon/public key z Settings → API (ak má funkcia zapnuté JWT)",
- *       // voliteľné: checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec
+ *       // voliteľné: getCustomerId() — vráti ID prihláseného; getCartEuros() / cartTotalSelector — suma košíka v €
+ *       // checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec
  *     };
  *   </script>
  *   <script defer src=".../elektroanalytics.js"></script>
@@ -81,6 +82,42 @@
     return thanksTest.test(pathname);
   }
 
+  function resolveCustomerId() {
+    try {
+      if (typeof cfg.getCustomerId === "function") {
+        var id = cfg.getCustomerId();
+        if (id != null && String(id).length > 0) return String(id).slice(0, 128);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function tryCartEuros() {
+    try {
+      if (typeof cfg.getCartEuros === "function") {
+        var v = cfg.getCartEuros();
+        if (typeof v === "number" && !isNaN(v)) return Math.round(v * 100) / 100;
+      }
+    } catch (e) {}
+    if (cfg.cartTotalSelector) {
+      try {
+        var el = document.querySelector(cfg.cartTotalSelector);
+        if (el && el.textContent) {
+          var raw = el.textContent.replace(/\s/g, " ").replace(/\u00a0/g, " ");
+          var m =
+            raw.match(/([\d\s,\.]+)\s*(€|EUR)/i) || raw.match(/€\s*([\d\s,\.]+)/i);
+          if (m) {
+            var chunk = m[1] ? m[1] : m[0];
+            var num = String(chunk).replace(/\s/g, "").replace(",", ".");
+            var n = parseFloat(num);
+            if (!isNaN(n)) return Math.round(n * 100) / 100;
+          }
+        }
+      } catch (e2) {}
+    }
+    return null;
+  }
+
   function pushEvent(event_type, path, meta) {
     QUEUE.push({
       event_type: event_type,
@@ -102,11 +139,14 @@
   function flush(isUnload) {
     if (QUEUE.length === 0) return;
     var batch = QUEUE.splice(0, 40);
-    var payload = JSON.stringify({
+    var cid = resolveCustomerId();
+    var payloadObj = {
       site_key: cfg.siteKey,
       session_key: sessionKey,
       events: batch,
-    });
+    };
+    if (cid) payloadObj.customer_id = cid;
+    var payload = JSON.stringify(payloadObj);
     var url = cfg.endpoint;
     var headers = {
       "Content-Type": "application/json",
@@ -145,7 +185,10 @@
         try {
           sessionStorage.setItem(STORAGE_LAST_PATH, key);
         } catch (e2) {}
-        pushEvent("cart_step", p, { step: step });
+        var cm = { step: step };
+        var euros = tryCartEuros();
+        if (euros != null) cm.cart_eur = euros;
+        pushEvent("cart_step", p, cm);
       }
     }
 
@@ -208,10 +251,15 @@
 
   setInterval(function () {
     tickActive();
-    pushEvent("heartbeat", pathNow(), {
+    var hb = {
       active_ms: Math.round(activeMs),
       vis: document.visibilityState,
-    });
+    };
+    if (/^\/kosik/i.test(location.pathname)) {
+      var ce = tryCartEuros();
+      if (ce != null) hb.cart_eur = ce;
+    }
+    pushEvent("heartbeat", pathNow(), hb);
     flush(false);
   }, heartbeatSec * 1000);
 
