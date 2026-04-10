@@ -11,7 +11,8 @@
  *       siteKey: "elektroenergy",
  *       ingestSecret: "rovnaké ako ANALYTICS_INGEST_SECRET vo funkcii",
  *       supabaseAnonKey: "anon/public key z Settings → API (ak má funkcia zapnuté JWT)",
- *       // voliteľné: getCustomerId() — vráti ID prihláseného; getCartEuros() / cartTotalSelector — suma košíka v €
+ *       // voliteľné: getCustomerId() — vlastné ID; customerIdSelector — CSS selektor na DOM;
+ *       // getCartEuros() / cartTotalSelector — suma košíka v € (inak sa skúsia predvolené selektory)
  *       // checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec
  *     };
  *   </script>
@@ -82,6 +83,38 @@
     return thanksTest.test(pathname);
   }
 
+  /**
+   * Heuristiky pre Shoptet, ak v EE_ANALYTICS nie je vlastné getCustomerId.
+   * Over na reálnej šablóne — DOM sa môže líšiť podľa témy / verzie.
+   */
+  function discoverCustomerId() {
+    if (typeof cfg.customerIdSelector === "string" && cfg.customerIdSelector) {
+      try {
+        var el = document.querySelector(cfg.customerIdSelector);
+        if (el) {
+          var fromAttr =
+            el.getAttribute("data-customer-id") ||
+            el.getAttribute("data-id") ||
+            el.getAttribute("data-account-id");
+          if (fromAttr && String(fromAttr).trim()) return String(fromAttr).trim().slice(0, 128);
+          if (el.textContent && String(el.textContent).trim())
+            return String(el.textContent).trim().slice(0, 128);
+        }
+      } catch (e) {}
+    }
+    try {
+      if (window.shoptet && window.shoptet.customer && window.shoptet.customer.id != null) {
+        return String(window.shoptet.customer.id).slice(0, 128);
+      }
+    } catch (e2) {}
+    try {
+      if (window.Shoptet && window.Shoptet.customer && window.Shoptet.customer.id != null) {
+        return String(window.Shoptet.customer.id).slice(0, 128);
+      }
+    } catch (e3) {}
+    return null;
+  }
+
   function resolveCustomerId() {
     try {
       if (typeof cfg.getCustomerId === "function") {
@@ -89,6 +122,8 @@
         if (id != null && String(id).length > 0) return String(id).slice(0, 128);
       }
     } catch (e) {}
+    var discovered = discoverCustomerId();
+    if (discovered) return discovered;
     return null;
   }
 
@@ -99,21 +134,37 @@
         if (typeof v === "number" && !isNaN(v)) return Math.round(v * 100) / 100;
       }
     } catch (e) {}
+    function parseEurosFromElement(el) {
+      if (!el || !el.textContent) return null;
+      var raw = el.textContent.replace(/\s/g, " ").replace(/\u00a0/g, " ");
+      var m = raw.match(/([\d\s,\.]+)\s*(€|EUR)/i) || raw.match(/€\s*([\d\s,\.]+)/i);
+      if (m) {
+        var chunk = m[1] ? m[1] : m[0];
+        var num = String(chunk).replace(/\s/g, "").replace(",", ".");
+        var n = parseFloat(num);
+        if (!isNaN(n)) return Math.round(n * 100) / 100;
+      }
+      return null;
+    }
     if (cfg.cartTotalSelector) {
       try {
-        var el = document.querySelector(cfg.cartTotalSelector);
-        if (el && el.textContent) {
-          var raw = el.textContent.replace(/\s/g, " ").replace(/\u00a0/g, " ");
-          var m =
-            raw.match(/([\d\s,\.]+)\s*(€|EUR)/i) || raw.match(/€\s*([\d\s,\.]+)/i);
-          if (m) {
-            var chunk = m[1] ? m[1] : m[0];
-            var num = String(chunk).replace(/\s/g, "").replace(",", ".");
-            var n = parseFloat(num);
-            if (!isNaN(n)) return Math.round(n * 100) / 100;
-          }
-        }
+        var elSel = document.querySelector(cfg.cartTotalSelector);
+        var parsed = parseEurosFromElement(elSel);
+        if (parsed != null) return parsed;
       } catch (e2) {}
+    }
+    var defaultCartSelectors = [
+      ".cart-summary strong.price-final",
+      ".recapitulation-table .price",
+      "[data-testid='cart-total']",
+      ".order-recapitulation__total",
+    ];
+    for (var ci = 0; ci < defaultCartSelectors.length; ci++) {
+      try {
+        var cel = document.querySelector(defaultCartSelectors[ci]);
+        var pv = parseEurosFromElement(cel);
+        if (pv != null) return pv;
+      } catch (e3) {}
     }
     return null;
   }
