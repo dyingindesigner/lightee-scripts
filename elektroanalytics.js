@@ -114,6 +114,8 @@
     };
     if (cfg.supabaseAnonKey) {
       headers.Authorization = "Bearer " + cfg.supabaseAnonKey;
+      // Supabase Edge Functions často vyžadujú aj apikey (rovnaká hodnota ako publishable/anon)
+      headers.apikey = cfg.supabaseAnonKey;
     }
     // sendBeacon nevie poslať vlastné hlavičky (tajomstvo) — pri odchode používame fetch + keepalive
     fetch(url, {
