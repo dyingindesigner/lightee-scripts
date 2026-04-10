@@ -2,6 +2,7 @@
  * Listing: množstvo +/− pri „Do košíka“ (B2B). Zdroj: lightee-scripts/productarrows.js
  * v1.1 — step už nie je odvodený z min (oprava +2 pri min>1); predvolený krok 1 ako pri HTML input type=number.
  * v1.2 — zobrazenie množstva z košíka; +/- pri položke v košíku volá updateQuantityInCart; sync po ShoptetDataLayerUpdated.
+ * v1.3 — sync množstva aj z getShoptetDataLayer('cart') / dataLayer (mini košík často nemá priceId v DOM).
  */
 (function () {
   var cache = {},
@@ -135,6 +136,66 @@
     if (input) input.value = formatVal(val, cfg);
   }
 
+  /** Pole položiek košíka z oficiálneho dataLayer (obsahuje priceId, quantity, itemId). */
+  function getShoptetCartArray() {
+    if (typeof getShoptetDataLayer === "function") {
+      try {
+        var c = getShoptetDataLayer("cart");
+        if (Array.isArray(c)) return c;
+      } catch (e1) {}
+    }
+    if (Array.isArray(window.dataLayer)) {
+      var i,
+        entry,
+        sh,
+        dl = dataLayer;
+      for (i = dl.length - 1; i >= 0; i--) {
+        entry = dl[i];
+        if (!entry || typeof entry !== "object") continue;
+        sh = entry.shoptet;
+        if (sh && Array.isArray(sh.cart)) return sh.cart;
+      }
+    }
+    return [];
+  }
+
+  /** Súčet množstva a itemId pre priceId (prvá neprázdna položka). */
+  function cartAggregateForPriceId(priceId) {
+    var want = Number(priceId);
+    if (!isFinite(want)) return null;
+    var cart = getShoptetCartArray();
+    var sum = 0;
+    var itemId = null;
+    var i,
+      it,
+      pid;
+    for (i = 0; i < cart.length; i++) {
+      it = cart[i];
+      if (!it || typeof it !== "object") continue;
+      pid = Number(it.priceId);
+      if (pid !== want) continue;
+      sum += Number(it.quantity) || 0;
+      if (!itemId && it.itemId != null && String(it.itemId) !== "") itemId = String(it.itemId);
+    }
+    if (sum <= 0) return null;
+    return { quantity: sum, itemId: itemId };
+  }
+
+  /** DOM + dataLayer: itemId pre API, quantity pre zobrazenie. */
+  function resolveCartRow(priceId) {
+    var dom = findCartLineContext(priceId);
+    var ag = cartAggregateForPriceId(priceId);
+    var itemId = (dom && dom.itemId) || (ag && ag.itemId) || null;
+    var qty = null;
+    if (dom && dom.amountInput) {
+      var raw = dom.amountInput.value;
+      var pv = parseFloat(String(raw).replace(",", "."));
+      if (isFinite(pv) && pv > 0) qty = pv;
+    }
+    if (qty == null && ag && ag.quantity > 0) qty = ag.quantity;
+    return { itemId: itemId, quantity: qty };
+  }
+
   /** Riadok košíka (mini košík / widget) s daným priceId — pre itemId a aktuálne množstvo. */
   function findCartLineContext(priceId) {
     var w = String(priceId);
@@ -144,7 +205,12 @@
         '.cart-table input[name="priceId"],' +
         'form.cart input[name="priceId"],' +
         '[data-testid="cartWidgetProduct"] input[name="priceId"],' +
-        '.advanced-order input[name="priceId"]'
+        '.advanced-order input[name="priceId"],' +
+        'header input[name="priceId"],' +
+        '.dropdown-menu input[name="priceId"],' +
+        '.cart-popup input[name="priceId"],' +
+        '[class*="cart-widget"] input[name="priceId"],' +
+        '[class*="headerCart"] input[name="priceId"]'
     );
     var i,
       inp,
@@ -178,12 +244,9 @@
     var qtyHost = wrap.querySelector(".ee-qty-inline");
     if (!qtyHost) return;
     var cfg = cfgFromQtyHost(qtyHost);
-    var ctx = findCartLineContext(pid);
-    if (ctx && ctx.amountInput) {
-      setQty(qtyHost, num(ctx.amountInput.value, cfg.min), cfg);
-    } else {
-      setQty(qtyHost, cfg.min, cfg);
-    }
+    var row = resolveCartRow(pid);
+    var q = row.quantity != null && row.quantity > 0 ? row.quantity : cfg.min;
+    setQty(qtyHost, q, cfg);
   }
 
   function syncAllWrapsFromCart() {
@@ -198,10 +261,10 @@
 
   function pushCartQty(priceId, qtyHost, cfg, nextVal) {
     nextVal = normalizeQty(nextVal, cfg);
-    var ctx = findCartLineContext(priceId);
+    var row = resolveCartRow(priceId);
     var cs = window.shoptet && shoptet.cartShared;
-    if (ctx && cs && typeof cs.updateQuantityInCart === "function") {
-      cs.updateQuantityInCart({ itemId: ctx.itemId, priceId: priceId, amount: nextVal });
+    if (row.itemId && cs && typeof cs.updateQuantityInCart === "function") {
+      cs.updateQuantityInCart({ itemId: row.itemId, priceId: priceId, amount: nextVal });
     }
     setQty(qtyHost, nextVal, cfg);
     scheduleCartSync();
@@ -210,10 +273,9 @@
   function applyStepDelta(priceId, qtyHost, cfg, delta) {
     var cur = num(qtyHost.dataset.qty, cfg.min);
     var next = cur + delta;
-    var ctx = findCartLineContext(priceId);
-    if (ctx && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
-      next = normalizeQty(next, cfg);
-      pushCartQty(priceId, qtyHost, cfg, next);
+    var row = resolveCartRow(priceId);
+    if (row.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
+      pushCartQty(priceId, qtyHost, cfg, normalizeQty(next, cfg));
       return;
     }
     setQty(qtyHost, next, cfg);
@@ -291,9 +353,9 @@
       function sync() {
         if (!isB2B()) return;
         var v = normalizeQty(input.value, cfg);
-        var ctx = findCartLineContext(priceId);
-        if (ctx && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
-          shoptet.cartShared.updateQuantityInCart({ itemId: ctx.itemId, priceId: priceId, amount: v });
+        var row = resolveCartRow(priceId);
+        if (row.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
+          shoptet.cartShared.updateQuantityInCart({ itemId: row.itemId, priceId: priceId, amount: v });
         }
         setQty(box, v, cfg);
         scheduleCartSync();
@@ -385,10 +447,10 @@
           setQty(qtyHost, amount, cfgCurrent);
         }
 
-        var ctx = findCartLineContext(pid);
+        var row = resolveCartRow(pid);
         var cs = shoptet.cartShared;
-        if (ctx && typeof cs.updateQuantityInCart === "function") {
-          cs.updateQuantityInCart({ itemId: ctx.itemId, priceId: pid, amount: amount });
+        if (row.itemId && typeof cs.updateQuantityInCart === "function") {
+          cs.updateQuantityInCart({ itemId: row.itemId, priceId: pid, amount: amount });
         } else {
           cs.addToCart({ priceId: pid, amount: amount });
         }
