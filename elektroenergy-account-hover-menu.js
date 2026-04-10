@@ -1,7 +1,7 @@
 /**
  * Elektroenergy.sk — desktop hover menu pod „Môj účet“
- * Vanilla JS, bez závislostí. Šírka ≥ 992px; bez (pointer: fine) kvôli notebookom s dotykom.
- * Opakované hľadanie triggera (MutationObserver) — Shoptet niekedy doplní účet až po načítaní / prihlásení.
+ * v4 — viditeľný trigger (nie skrytý mobile klon), resize → znova pripojiť, vyšší z-index, hover aj na <span>.
+ * v4.1 — dedupe kandidátov cez WeakSet (predtým zlý výber), span cez children namiesto :scope.
  */
 (function () {
   "use strict";
@@ -43,14 +43,63 @@
     return el.closest("a") || el.closest("button");
   }
 
-  function findAccountTrigger() {
-    /** Elektroenergy / Shoptet šablóna: účet v hornej lište */
-    var direct = document.querySelector(
-      "a.top-nav-button-account, a.top-nav-button[href='/klient/'], a.top-nav-button[href='/klient']"
-    );
-    if (direct && !direct.closest(".login-widget") && hrefIsClientAccountRoot(direct.getAttribute("href") || direct.href || "")) {
-      return direct;
+  /** Prvý match v DOMe často patrí skrytej mobilnej verzii — berieme viditeľný s najväčšou plochou. */
+  function isRoughlyVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    var st = window.getComputedStyle(el);
+    if (st.visibility === "hidden" || st.display === "none") return false;
+    if (parseFloat(st.opacity || "1") === 0) return false;
+    return true;
+  }
+
+  function pickBestVisibleAccountLink(nodes) {
+    var best = null;
+    var bestArea = 0;
+    var i, el, r, area, hrefAttr;
+    for (i = 0; i < nodes.length; i++) {
+      el = nodes[i];
+      if (!el || el.tagName !== "A" || el.closest(".login-widget")) continue;
+      hrefAttr = el.getAttribute("href") || el.href || "";
+      if (!hrefIsClientAccountRoot(hrefAttr)) continue;
+      if (!isRoughlyVisible(el)) continue;
+      r = el.getBoundingClientRect();
+      area = r.width * r.height;
+      if (area >= bestArea) {
+        bestArea = area;
+        best = el;
+      }
     }
+    return best;
+  }
+
+  function collectAccountCandidates() {
+    var seen = [];
+    var dedup = typeof WeakSet !== "undefined" ? new WeakSet() : null;
+    function add(sel) {
+      var list = document.querySelectorAll(sel);
+      var i, el;
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (!el) continue;
+        if (dedup) {
+          if (dedup.has(el)) continue;
+          dedup.add(el);
+        }
+        seen.push(el);
+      }
+    }
+    add("a.top-nav-button-account");
+    add("a.top-nav-button[href='/klient/']");
+    add("a.top-nav-button[href='/klient']");
+    add('a[class*="top-nav-button-account"]');
+    return seen;
+  }
+
+  function findAccountTrigger() {
+    var best = pickBestVisibleAccountLink(collectAccountCandidates());
+    if (best) return best;
 
     var selectors = [
       '[data-testid="linkAccountOverview"]',
@@ -62,7 +111,8 @@
       var raw = document.querySelector(selectors[i]);
       var el = resolveClickable(raw);
       if (!el || el.closest(".login-widget")) continue;
-      if (el.tagName === "A" && !hrefIsClientAccountRoot(el.getAttribute("href") || "")) continue;
+      if (el.tagName === "A" && !hrefIsClientAccountRoot(el.getAttribute("href") || el.href || "")) continue;
+      if (el.tagName === "A" && !isRoughlyVisible(el)) continue;
       return el;
     }
 
@@ -77,7 +127,9 @@
         href = n.getAttribute("href") || "";
         t = (n.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
         if (/m[oô]j\s*účet|moj\s*ucet|m[uů]j\s*účet|m[uů]j\s*ucet/.test(t)) {
-          if (n.tagName === "BUTTON" || hrefIsClientAccountRoot(href)) return n;
+          if (n.tagName === "BUTTON" || hrefIsClientAccountRoot(href || n.href || "")) {
+            if (n.tagName !== "A" || isRoughlyVisible(n)) return n;
+          }
         }
       }
     }
@@ -85,18 +137,19 @@
     var candidates = document.querySelectorAll(
       '.user-action a[href], .user-action-in a[href], header .user-action a[href], header a[href*="klient"]'
     );
-    var best = null;
+    var fb = null;
     for (i = 0; i < candidates.length; i++) {
       n = candidates[i];
       if (n.closest(".login-widget")) continue;
       href = n.getAttribute("href") || "";
       if (!hrefIsClientAccountRoot(href)) continue;
       if (/zabudnute-heslo|registracia|zapomenute|signup/i.test(href)) continue;
+      if (!isRoughlyVisible(n)) continue;
       t = (n.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
       if (/prihl[aá]s/i.test(t) && !/účet|ucet/i.test(t)) continue;
-      if (/účet|ucet/i.test(t) || !best) best = n;
+      if (/účet|ucet/i.test(t) || !fb) fb = n;
     }
-    return best;
+    return fb;
   }
 
   function injectStyles() {
@@ -110,7 +163,7 @@
     style.textContent =
       "." +
       PANEL_CLASS +
-      "{position:fixed;z-index:100050;margin:0;padding:6px 0;min-width:240px;list-style:none;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.12);font-size:15px;line-height:1.35;visibility:hidden;opacity:0;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease,visibility .15s;}" +
+      "{position:fixed;z-index:2147483000;margin:0;padding:6px 0;min-width:240px;list-style:none;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.12);font-size:15px;line-height:1.35;visibility:hidden;opacity:0;transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease,visibility .15s;}" +
       "." +
       PANEL_CLASS +
       "." +
@@ -143,6 +196,7 @@
 
   var attachScheduled = false;
   var observerStarted = false;
+  var resizeDebounce = null;
 
   function attachMenu() {
     if (document.documentElement.getAttribute(ATTR_MOUNTED) === "1") return;
@@ -207,8 +261,16 @@
     trigger.setAttribute("aria-haspopup", "menu");
     if (!trigger.getAttribute("aria-expanded")) trigger.setAttribute("aria-expanded", "false");
 
-    trigger.addEventListener("mouseenter", openPanel, false);
-    trigger.addEventListener("mouseleave", scheduleClose, false);
+    function bindHoverTargets(el) {
+      el.addEventListener("mouseenter", openPanel, false);
+      el.addEventListener("mouseleave", scheduleClose, false);
+    }
+
+    bindHoverTargets(trigger);
+    var ch = trigger.children;
+    for (var si = 0; si < ch.length; si++) {
+      if (ch[si].tagName === "SPAN") bindHoverTargets(ch[si]);
+    }
     panel.addEventListener(
       "mouseenter",
       function () {
@@ -275,6 +337,14 @@
     setTimeout(scheduleAttach, 1500);
     setTimeout(scheduleAttach, 3500);
     window.addEventListener("load", scheduleAttach);
+
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeDebounce);
+      resizeDebounce = setTimeout(function () {
+        if (document.documentElement.getAttribute(ATTR_MOUNTED) === "1") return;
+        scheduleAttach();
+      }, 250);
+    });
   }
 
   if (document.readyState === "loading") {
