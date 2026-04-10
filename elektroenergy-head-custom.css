@@ -1,0 +1,114 @@
+/**
+ * Elektroenergy.sk — doplnkové štýly pre hlavičku Shoptet (HTML kódy).
+ * Načítaj cez jsDelivr; úpravy rob v lightee-scripts repozitári.
+ */
+
+/* Override Shoptet logo size */
+#header .site-name a[data-testid="linkWebsiteLogo"] img {
+  max-height: 75px !important;
+  height: auto !important;
+}
+
+/* === COLOR: everywhere (listing + detail) === */
+.p-code-label {
+  color: #111 !important;
+  font-weight: 700 !important;
+}
+
+.p-code > span:last-child {
+  background: #e8f5e2 !important;
+  color: #1f7a3f !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  font-weight: 700 !important;
+}
+
+/* === FONT SIZE: only on product detail === */
+.p-detail-info .p-code-label {
+  font-size: 14px !important;
+}
+
+.p-detail-info .p-code > span:last-child {
+  font-size: 14px !important;
+}
+
+/* Elektroenergy intro block */
+.ee-intro {
+  position: relative;
+  overflow: hidden;
+  margin: 8px 0 0;
+  padding: 0;
+  max-width: 920px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.ee-intro__bg {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.ee-intro__bg--top {
+  top: -80px;
+  right: -80px;
+  width: 220px;
+  height: 220px;
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.ee-intro__bg--bottom {
+  bottom: -60px;
+  left: -60px;
+  width: 180px;
+  height: 180px;
+  background: rgba(17, 24, 39, 0.04);
+}
+
+.ee-intro__kicker {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.ee-intro__title {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 14px;
+  font-size: 34px;
+  line-height: 1.2;
+  color: #111827;
+  font-weight: 800;
+}
+
+.ee-intro__text {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.ee-intro__text:last-child {
+  margin-bottom: 0;
+  color: #4b5563;
+  font-size: 17px;
+}
+
+@media (max-width: 768px) {
+  .ee-intro__title {
+    font-size: 28px;
+  }
+
+  .ee-intro__text {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+}
