@@ -1,18 +1,22 @@
 /**
- * Elektroenergy.sk — B2B: potlačenie Colorbox popupu „Produkt bol pridaný do košíka!“
- * cez Shoptet API parameter silent pri addToCart / updateQuantityInCart.
+ * Elektroenergy.sk — B2B: potlačenie popupu „Produkt bol pridaný do košíka!“ (Colorbox advanced order).
  *
- * Načítajte PRED ostatnými vlastnými skriptami (productarrows.js, …), aby sa patchol cartShared
- * skôr, než sa zavolá prvé pridanie do košíka.
+ * 1) addToCart / updateQuantityInCart — doplnenie silent: true (Shoptet API).
+ * 2) Opätovné obalenie, ak Shoptet po načítaní prepíše funkcie na cartShared (nie len prvý patch).
+ * 3) Záloha: ak sa modal aj tak otvorí, okamžite ho zatvoriť (B2B).
+ *
+ * Načítajte PRED productarrows.js a ostatnými skriptami, ktoré volajú košík.
  *
  * @see https://developers.shoptet.com/home/shoptet-tools/editing-templates/how-to-properly-add-product-to-cart-with-javascript/
  */
 (function () {
   "use strict";
 
-  var PATCH_FLAG = "__eeB2bSilentCartPopup";
+  var WRAP_MARK = "__eeB2bSilentWrap";
+  var SESSION_KEY = "ee_b2b_session";
   var pollAttempts = 0;
-  var maxPolls = 80;
+  var maxPolls = 120;
+  var closeDebounce = null;
 
   function n(t) {
     return (t || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -75,6 +79,21 @@
     return !!s.loggedIn && s.groupId != null && Number(s.groupId) !== 1;
   }
 
+  /** Po jednom rozpoznaní B2B v session zapamätáme (popup môže prísť skôr než groupId v dataLayer). */
+  function shouldTreatAsB2BForUi() {
+    if (isB2B()) {
+      try {
+        sessionStorage.setItem(SESSION_KEY, "1");
+      } catch (e) {}
+      return true;
+    }
+    try {
+      return sessionStorage.getItem(SESSION_KEY) === "1";
+    } catch (e2) {
+      return false;
+    }
+  }
+
   function withSilent(opts) {
     if (!isB2B()) return opts;
     if (opts == null || typeof opts !== "object" || Object.prototype.toString.call(opts) !== "[object Object]") return opts;
@@ -88,56 +107,124 @@
     return o;
   }
 
+  /** Obalí funkcie znova, ak Shoptet prepísal referenciu (bez flagu na cartShared). */
   function patchCartShared(cs) {
-    if (!cs || cs[PATCH_FLAG]) return true;
-    if (typeof cs.addToCart !== "function" && typeof cs.updateQuantityInCart !== "function") return false;
+    if (!cs) return false;
+    var touched = false;
 
-    if (typeof cs.addToCart === "function") {
+    if (typeof cs.addToCart === "function" && !cs.addToCart[WRAP_MARK]) {
       var origAdd = cs.addToCart.bind(cs);
-      cs.addToCart = function (opts) {
+      var wrappedAdd = function (opts) {
         return origAdd(withSilent(opts));
       };
+      wrappedAdd[WRAP_MARK] = true;
+      cs.addToCart = wrappedAdd;
+      touched = true;
     }
 
-    if (typeof cs.updateQuantityInCart === "function") {
+    if (typeof cs.updateQuantityInCart === "function" && !cs.updateQuantityInCart[WRAP_MARK]) {
       var origUpd = cs.updateQuantityInCart.bind(cs);
-      cs.updateQuantityInCart = function (opts) {
+      var wrappedUpd = function (opts) {
         return origUpd(withSilent(opts));
       };
+      wrappedUpd[WRAP_MARK] = true;
+      cs.updateQuantityInCart = wrappedUpd;
+      touched = true;
     }
 
-    cs[PATCH_FLAG] = true;
-    return true;
+    return touched;
   }
 
   function tryPatch() {
     var sh = window.shoptet;
-    if (sh && sh.cartShared) return patchCartShared(sh.cartShared);
-    return false;
+    if (!sh || !sh.cartShared) return false;
+    patchCartShared(sh.cartShared);
+    return true;
   }
 
   function schedulePoll() {
-    if (tryPatch()) return;
     var id = setInterval(function () {
       pollAttempts++;
-      if (tryPatch() || pollAttempts >= maxPolls) clearInterval(id);
-    }, 250);
+      tryPatch();
+      if (pollAttempts >= maxPolls) clearInterval(id);
+    }, 200);
+  }
+
+  function closeAdvancedOrderIfOpen() {
+    if (!shouldTreatAsB2BForUi()) return;
+
+    var box = document.getElementById("colorbox");
+    if (!box) return;
+
+    var st = window.getComputedStyle(box);
+    if (st.display === "none" || st.visibility === "hidden") return;
+
+    var isOrderPopup =
+      box.classList.contains("colorbox--order") ||
+      !!box.querySelector('[data-testid="popupAdvancedOrder"]') ||
+      !!box.querySelector(".advanced-order");
+
+    if (!isOrderPopup) return;
+
+    if (window.jQuery && window.jQuery.colorbox) {
+      try {
+        window.jQuery.colorbox.close();
+      } catch (e0) {}
+    }
+
+    var btn = box.querySelector("#cboxClose, .cboxClose--order, button.cboxClose");
+    if (btn) {
+      try {
+        btn.click();
+      } catch (e1) {}
+    }
+
+    var ov = document.getElementById("cboxOverlay");
+    if (ov) {
+      try {
+        ov.style.display = "none";
+      } catch (e2) {}
+    }
+  }
+
+  function scheduleCloseCheck() {
+    clearTimeout(closeDebounce);
+    closeDebounce = setTimeout(closeAdvancedOrderIfOpen, 0);
+  }
+
+  function bootObserver() {
+    if (document.documentElement.dataset.eeB2bCartMo === "1") return;
+    document.documentElement.dataset.eeB2bCartMo = "1";
+
+    var mo = new MutationObserver(scheduleCloseCheck);
+    mo.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
   }
 
   function boot() {
-    if (tryPatch()) return;
+    tryPatch();
     schedulePoll();
+    bootObserver();
+    scheduleCloseCheck();
   }
 
   boot();
 
   document.addEventListener("ShoptetDOMPageContentLoaded", function () {
-    var sh = window.shoptet;
-    if (sh && sh.cartShared && !sh.cartShared[PATCH_FLAG]) patchCartShared(sh.cartShared);
+    tryPatch();
+    scheduleCloseCheck();
+  });
+
+  document.addEventListener("ShoptetDataLayerUpdated", function () {
+    tryPatch();
   });
 
   window.addEventListener("load", function () {
-    var sh = window.shoptet;
-    if (sh && sh.cartShared && !sh.cartShared[PATCH_FLAG]) patchCartShared(sh.cartShared);
+    tryPatch();
+    scheduleCloseCheck();
   });
 })();
