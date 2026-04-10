@@ -1,10 +1,7 @@
 /**
  * Listing: množstvo +/− pri „Do košíka“ (B2B). Zdroj: lightee-scripts/productarrows.js
- * v1.1 — step už nie je odvodený z min (oprava +2 pri min>1); predvolený krok 1 ako pri HTML input type=number.
- * v1.2 — zobrazenie množstva z košíka; +/- pri položke v košíku volá updateQuantityInCart; sync po ShoptetDataLayerUpdated.
- * v1.3 — sync množstva aj z getShoptetDataLayer('cart') / dataLayer (mini košík často nemá priceId v DOM).
- * v1.4 — priceId v <header> na EE matchoval karty produktov (input.amount z .ee-qty-wrap) → zlé API; len korene košíka;
- *         množstvo najprv z dataLayer; updateQuantityInCart len ak položka naozaj v košíku; sync pri hoveri na košík.
+ * v1.5 — jeden „commit“ do košíka (add / update / remove); +/- funguje aj bez položky v košíku;
+ *         vstup + Enter / blur zapíše množstvo; sync z dataLayer neprepisuje pole počas úpravy.
  */
 (function () {
   var cache = {},
@@ -138,7 +135,6 @@
     if (input) input.value = formatVal(val, cfg);
   }
 
-  /** Pole položiek košíka z oficiálneho dataLayer (obsahuje priceId, quantity, itemId). */
   function getShoptetCartArray() {
     if (typeof getShoptetDataLayer === "function") {
       try {
@@ -161,7 +157,6 @@
     return [];
   }
 
-  /** Súčet množstva a itemId pre priceId (prvá neprázdna položka). */
   function cartAggregateForPriceId(priceId) {
     var want = Number(priceId);
     if (!isFinite(want)) return null;
@@ -183,11 +178,17 @@
     return { quantity: sum, itemId: itemId };
   }
 
-  /** DOM + dataLayer: itemId pre API, quantity pre zobrazenie (dataLayer má prioritu — nie náš .ee-qty-wrap). */
+  function resolveItemId(priceId) {
+    var ag = cartAggregateForPriceId(priceId);
+    if (ag && ag.itemId) return ag.itemId;
+    var dom = findCartLineContext(priceId);
+    return dom && dom.itemId ? dom.itemId : null;
+  }
+
   function resolveCartRow(priceId) {
     var dom = findCartLineContext(priceId);
     var ag = cartAggregateForPriceId(priceId);
-    var itemId = (dom && dom.itemId) || (ag && ag.itemId) || null;
+    var itemId = (ag && ag.itemId) || (dom && dom.itemId) || null;
     var qty = null;
     if (ag && ag.quantity > 0) qty = ag.quantity;
     else if (dom && dom.amountInput && !dom.amountInput.closest(".ee-qty-wrap")) {
@@ -233,7 +234,6 @@
     }
   }
 
-  /** Riadok košíka — len vnútri známych koreňov košíka (nie <header> + produktové karty). */
   function findCartLineContext(priceId) {
     var w = String(priceId);
     var found = null;
@@ -252,14 +252,67 @@
     return found;
   }
 
+  function qtyWrapFromInner(el) {
+    return el && el.closest ? el.closest(".ee-qty-wrap") : null;
+  }
+
+  function isWrapQtyEditing(wrap) {
+    if (!wrap) return false;
+    if (wrap.getAttribute("data-ee-qty-editing") === "1") return true;
+    var inp = wrap.querySelector(".ee-qty-inline input.amount");
+    return inp && document.activeElement === inp;
+  }
+
   function cfgFromQtyHost(qtyHost) {
     var input = qtyHost.querySelector("input.amount");
     if (!input) return { min: 1, step: 1, max: 9999 };
-    return parseDetailAmountInput(input);
+    var cfg = parseDetailAmountInput(input);
+    var pm = input.getAttribute("data-ee-product-min");
+    if (pm != null && String(pm).replace(/\s/g, "") !== "") cfg.min = num(pm, 1);
+    return cfg;
+  }
+
+  /**
+   * Zapíše cieľové množstvo do košíka: 0 / prázdne = odstrániť riadok, inak add alebo update.
+   */
+  function commitTargetQtyToCart(priceId, qtyHost, cfg, rawVal) {
+    var cs = window.shoptet && shoptet.cartShared;
+    if (!cs || !isB2B()) return;
+
+    var parsed = parseFloat(String(rawVal != null ? rawVal : "").replace(",", "."));
+    var ag = cartAggregateForPriceId(priceId);
+    var cartQty = ag && ag.quantity > 0 ? ag.quantity : 0;
+    var itemId = resolveItemId(priceId);
+    var min = num(cfg.min, 1);
+
+    if (!isFinite(parsed) || parsed <= 0) {
+      if (cartQty > 0 && itemId && typeof cs.removeFromCart === "function") {
+        cs.removeFromCart({ itemId: itemId });
+      }
+      setQty(qtyHost, min, cfg);
+      scheduleCartSync();
+      return;
+    }
+
+    var target = normalizeQty(parsed, cfg);
+
+    if (cartQty > 0 && itemId && typeof cs.updateQuantityInCart === "function") {
+      cs.updateQuantityInCart({ itemId: itemId, priceId: priceId, amount: target });
+    } else if (typeof cs.addToCart === "function") {
+      try {
+        cs.addToCart({ priceId: priceId, amount: target, silent: true });
+      } catch (e2) {
+        cs.addToCart({ priceId: priceId, amount: target });
+      }
+    }
+
+    setQty(qtyHost, target, cfg);
+    scheduleCartSync();
   }
 
   function syncWrapFromCart(wrap) {
     if (!wrap || !isB2B()) return;
+    if (isWrapQtyEditing(wrap)) return;
     var pid = parseInt(wrap.getAttribute("data-ee-price-id"), 10);
     if (!isFinite(pid)) return;
     var qtyHost = wrap.querySelector(".ee-qty-inline");
@@ -277,31 +330,25 @@
 
   function scheduleCartSync() {
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(syncAllWrapsFromCart, 80);
+    syncTimer = setTimeout(syncAllWrapsFromCart, 200);
   }
 
-  function pushCartQty(priceId, qtyHost, cfg, nextVal) {
-    nextVal = normalizeQty(nextVal, cfg);
-    var ag = cartAggregateForPriceId(priceId);
-    var row = resolveCartRow(priceId);
-    var cs = window.shoptet && shoptet.cartShared;
-    if (ag && ag.quantity > 0 && row.itemId && cs && typeof cs.updateQuantityInCart === "function") {
-      cs.updateQuantityInCart({ itemId: row.itemId, priceId: priceId, amount: nextVal });
-    }
-    setQty(qtyHost, nextVal, cfg);
-    scheduleCartSync();
-  }
-
+  /** +/- podľa skutočného stavu košíka (prvé + pridá min, ďalšie +/- idú po kroku). */
   function applyStepDelta(priceId, qtyHost, cfg, delta) {
-    var cur = num(qtyHost.dataset.qty, cfg.min);
-    var next = cur + delta;
     var ag = cartAggregateForPriceId(priceId);
-    var row = resolveCartRow(priceId);
-    if (ag && ag.quantity > 0 && row.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
-      pushCartQty(priceId, qtyHost, cfg, normalizeQty(next, cfg));
-      return;
+    var cartQty = ag && ag.quantity > 0 ? ag.quantity : 0;
+    var step = stepPositive(cfg);
+    var min = num(cfg.min, 1);
+    var next;
+
+    if (delta > 0) {
+      next = cartQty <= 0 ? min : cartQty + step;
+    } else {
+      if (cartQty <= 0) return;
+      next = cartQty - step;
     }
-    setQty(qtyHost, next, cfg);
+
+    commitTargetQtyToCart(priceId, qtyHost, cfg, next);
   }
 
   function css() {
@@ -330,13 +377,13 @@
       '"><span>-</span></button>' +
       '<input type="number" name="amount" class="amount" value="' +
       formatVal(min, cfg) +
-      '" min="' +
-      min +
-      '" step="' +
+      '" min="0" step="' +
       step +
       '" max="' +
       max +
       '" data-min="' +
+      min +
+      '" data-ee-product-min="' +
       min +
       '" inputmode="decimal">' +
       '<button type="button" class="increase" aria-label="Zvýšiť množstvo o ' +
@@ -351,11 +398,31 @@
     var plus = box.querySelector(".increase");
     var input = box.querySelector("input.amount");
     var step = stepPositive(cfg);
+    var wrap = qtyWrapFromInner(box);
 
     function stop(e) {
       e.preventDefault();
       e.stopPropagation();
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    }
+
+    if (wrap) {
+      wrap.addEventListener(
+        "focusin",
+        function (e) {
+          if (e.target && e.target.classList && e.target.classList.contains("amount")) wrap.setAttribute("data-ee-qty-editing", "1");
+        },
+        true
+      );
+      wrap.addEventListener(
+        "focusout",
+        function () {
+          setTimeout(function () {
+            if (!wrap.contains(document.activeElement)) wrap.removeAttribute("data-ee-qty-editing");
+          }, 0);
+        },
+        true
+      );
     }
 
     if (minus)
@@ -373,19 +440,27 @@
       });
 
     if (input) {
-      function sync() {
+      function commitFromInput() {
         if (!isB2B()) return;
-        var v = normalizeQty(input.value, cfg);
-        var ag0 = cartAggregateForPriceId(priceId);
-        var row0 = resolveCartRow(priceId);
-        if (ag0 && ag0.quantity > 0 && row0.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
-          shoptet.cartShared.updateQuantityInCart({ itemId: row0.itemId, priceId: priceId, amount: v });
-        }
-        setQty(box, v, cfg);
-        scheduleCartSync();
+        if (wrap) wrap.removeAttribute("data-ee-qty-editing");
+        commitTargetQtyToCart(priceId, box, cfg, input.value);
       }
-      input.addEventListener("change", sync);
-      input.addEventListener("blur", sync);
+      input.addEventListener("keydown", function (e) {
+        if (!isB2B()) return;
+        if (e.key === "Enter") {
+          e.preventDefault();
+          input.dataset.eeSkipBlurCommit = "1";
+          commitFromInput();
+        }
+      });
+      input.addEventListener("blur", function () {
+        if (!isB2B()) return;
+        if (input.dataset.eeSkipBlurCommit === "1") {
+          delete input.dataset.eeSkipBlurCommit;
+          return;
+        }
+        commitFromInput();
+      });
     }
   }
 
@@ -464,22 +539,10 @@
         e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
 
-        var amount = cfgCurrent.min;
-        if (qtyHost) {
-          var input = qtyHost.querySelector("input.amount");
-          amount = normalizeQty(input ? input.value : qtyHost.dataset.qty, cfgCurrent);
-          setQty(qtyHost, amount, cfgCurrent);
-        }
-
-        var ag1 = cartAggregateForPriceId(pid);
-        var row1 = resolveCartRow(pid);
-        var cs = shoptet.cartShared;
-        if (ag1 && ag1.quantity > 0 && row1.itemId && typeof cs.updateQuantityInCart === "function") {
-          cs.updateQuantityInCart({ itemId: row1.itemId, priceId: pid, amount: amount });
-        } else {
-          cs.addToCart({ priceId: pid, amount: amount });
-        }
-        scheduleCartSync();
+        if (!qtyHost) return;
+        var input = qtyHost.querySelector("input.amount");
+        var amountRaw = input ? input.value : qtyHost.dataset.qty;
+        commitTargetQtyToCart(pid, qtyHost, cfgCurrent, amountRaw);
       },
       true
     );
