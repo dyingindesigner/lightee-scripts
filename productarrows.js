@@ -3,6 +3,8 @@
  * v1.1 — step už nie je odvodený z min (oprava +2 pri min>1); predvolený krok 1 ako pri HTML input type=number.
  * v1.2 — zobrazenie množstva z košíka; +/- pri položke v košíku volá updateQuantityInCart; sync po ShoptetDataLayerUpdated.
  * v1.3 — sync množstva aj z getShoptetDataLayer('cart') / dataLayer (mini košík často nemá priceId v DOM).
+ * v1.4 — priceId v <header> na EE matchoval karty produktov (input.amount z .ee-qty-wrap) → zlé API; len korene košíka;
+ *         množstvo najprv z dataLayer; updateQuantityInCart len ak položka naozaj v košíku; sync pri hoveri na košík.
  */
 (function () {
   var cache = {},
@@ -181,54 +183,73 @@
     return { quantity: sum, itemId: itemId };
   }
 
-  /** DOM + dataLayer: itemId pre API, quantity pre zobrazenie. */
+  /** DOM + dataLayer: itemId pre API, quantity pre zobrazenie (dataLayer má prioritu — nie náš .ee-qty-wrap). */
   function resolveCartRow(priceId) {
     var dom = findCartLineContext(priceId);
     var ag = cartAggregateForPriceId(priceId);
     var itemId = (dom && dom.itemId) || (ag && ag.itemId) || null;
     var qty = null;
-    if (dom && dom.amountInput) {
+    if (ag && ag.quantity > 0) qty = ag.quantity;
+    else if (dom && dom.amountInput && !dom.amountInput.closest(".ee-qty-wrap")) {
       var raw = dom.amountInput.value;
       var pv = parseFloat(String(raw).replace(",", "."));
       if (isFinite(pv) && pv > 0) qty = pv;
     }
-    if (qty == null && ag && ag.quantity > 0) qty = ag.quantity;
-    return { itemId: itemId, quantity: qty };
+    return {
+      itemId: itemId,
+      quantity: qty,
+      inCart: !!(ag && ag.quantity > 0),
+    };
   }
 
-  /** Riadok košíka (mini košík / widget) s daným priceId — pre itemId a aktuálne množstvo. */
+  function forEachPriceIdInputInCartRoots(cb) {
+    var roots = document.querySelectorAll(
+      "#cart-widget," +
+        "#navigationCart," +
+        ".navigation-cart," +
+        ".header-cart," +
+        ".responsive-cart," +
+        ".cart-popup," +
+        ".cart-table," +
+        "table.cart-table," +
+        "form.cart," +
+        ".advanced-order," +
+        '[data-testid="cartWidget"],' +
+        '[data-testid="cartWidgetProduct"]'
+    );
+    var ri,
+      r,
+      list,
+      j,
+      inp;
+    for (ri = 0; ri < roots.length; ri++) {
+      r = roots[ri];
+      if (!r || !r.querySelectorAll) continue;
+      list = r.querySelectorAll('input[name="priceId"]');
+      for (j = 0; j < list.length; j++) {
+        inp = list[j];
+        if (inp && !inp.closest(".ee-qty-wrap")) cb(inp);
+      }
+    }
+  }
+
+  /** Riadok košíka — len vnútri známych koreňov košíka (nie <header> + produktové karty). */
   function findCartLineContext(priceId) {
     var w = String(priceId);
-    var candidates = document.querySelectorAll(
-      '#cart-widget input[name="priceId"],' +
-        '.cart-widget input[name="priceId"],' +
-        '.cart-table input[name="priceId"],' +
-        'form.cart input[name="priceId"],' +
-        '[data-testid="cartWidgetProduct"] input[name="priceId"],' +
-        '.advanced-order input[name="priceId"],' +
-        'header input[name="priceId"],' +
-        '.dropdown-menu input[name="priceId"],' +
-        '.cart-popup input[name="priceId"],' +
-        '[class*="cart-widget"] input[name="priceId"],' +
-        '[class*="headerCart"] input[name="priceId"]'
-    );
-    var i,
-      inp,
-      row,
-      itemEl,
-      amtEl;
-    for (i = 0; i < candidates.length; i++) {
-      inp = candidates[i];
-      if (!inp || String(inp.value) !== w) continue;
-      row = inp.closest(
-        'tr, li, .product, .cart-widget-product, [data-micro="cartItem"], [data-testid="cartWidgetProduct"], .removeable'
+    var found = null;
+    forEachPriceIdInputInCartRoots(function (inp) {
+      if (found || String(inp.value) !== w) return;
+      var row = inp.closest(
+        'tr, li, .cart-widget-product, [data-micro="cartItem"], [data-testid="cartWidgetProduct"], .removeable, .cart-popup-product'
       );
       if (!row) row = inp.closest("form") || inp.parentElement;
-      itemEl = row.querySelector('input[name="itemId"], input[name="itemGuid"]');
-      amtEl = row.querySelector('input.amount, input[name="amount"][type="number"], input[name="quantity"]');
-      if (itemEl && itemEl.value) return { itemId: itemEl.value, amountInput: amtEl };
-    }
-    return null;
+      if (!row) return;
+      var itemEl = row.querySelector('input[name="itemId"], input[name="itemGuid"]');
+      var amtEl = row.querySelector('input.amount, input[name="amount"][type="number"], input[name="quantity"]');
+      if (amtEl && amtEl.closest(".ee-qty-wrap")) amtEl = null;
+      if (itemEl && itemEl.value) found = { itemId: itemEl.value, amountInput: amtEl };
+    });
+    return found;
   }
 
   function cfgFromQtyHost(qtyHost) {
@@ -261,9 +282,10 @@
 
   function pushCartQty(priceId, qtyHost, cfg, nextVal) {
     nextVal = normalizeQty(nextVal, cfg);
+    var ag = cartAggregateForPriceId(priceId);
     var row = resolveCartRow(priceId);
     var cs = window.shoptet && shoptet.cartShared;
-    if (row.itemId && cs && typeof cs.updateQuantityInCart === "function") {
+    if (ag && ag.quantity > 0 && row.itemId && cs && typeof cs.updateQuantityInCart === "function") {
       cs.updateQuantityInCart({ itemId: row.itemId, priceId: priceId, amount: nextVal });
     }
     setQty(qtyHost, nextVal, cfg);
@@ -273,8 +295,9 @@
   function applyStepDelta(priceId, qtyHost, cfg, delta) {
     var cur = num(qtyHost.dataset.qty, cfg.min);
     var next = cur + delta;
+    var ag = cartAggregateForPriceId(priceId);
     var row = resolveCartRow(priceId);
-    if (row.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
+    if (ag && ag.quantity > 0 && row.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
       pushCartQty(priceId, qtyHost, cfg, normalizeQty(next, cfg));
       return;
     }
@@ -353,9 +376,10 @@
       function sync() {
         if (!isB2B()) return;
         var v = normalizeQty(input.value, cfg);
-        var row = resolveCartRow(priceId);
-        if (row.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
-          shoptet.cartShared.updateQuantityInCart({ itemId: row.itemId, priceId: priceId, amount: v });
+        var ag0 = cartAggregateForPriceId(priceId);
+        var row0 = resolveCartRow(priceId);
+        if (ag0 && ag0.quantity > 0 && row0.itemId && window.shoptet && shoptet.cartShared && typeof shoptet.cartShared.updateQuantityInCart === "function") {
+          shoptet.cartShared.updateQuantityInCart({ itemId: row0.itemId, priceId: priceId, amount: v });
         }
         setQty(box, v, cfg);
         scheduleCartSync();
@@ -447,10 +471,11 @@
           setQty(qtyHost, amount, cfgCurrent);
         }
 
-        var row = resolveCartRow(pid);
+        var ag1 = cartAggregateForPriceId(pid);
+        var row1 = resolveCartRow(pid);
         var cs = shoptet.cartShared;
-        if (row.itemId && typeof cs.updateQuantityInCart === "function") {
-          cs.updateQuantityInCart({ itemId: row.itemId, priceId: pid, amount: amount });
+        if (ag1 && ag1.quantity > 0 && row1.itemId && typeof cs.updateQuantityInCart === "function") {
+          cs.updateQuantityInCart({ itemId: row1.itemId, priceId: pid, amount: amount });
         } else {
           cs.addToCart({ priceId: pid, amount: amount });
         }
@@ -476,12 +501,36 @@
     timer = setTimeout(init, 120);
   }
 
+  function bindCartHoverSync() {
+    if (document.documentElement.dataset.eeQtyCartHover === "1") return;
+    document.documentElement.dataset.eeQtyCartHover = "1";
+    document.addEventListener(
+      "pointerover",
+      function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        if (
+          t.closest('a[href*="kosik"]') ||
+          t.closest('a[href*="/kosik/"]') ||
+          t.closest("#cart-widget") ||
+          t.closest(".header-cart") ||
+          t.closest(".responsive-cart")
+        )
+          scheduleCartSync();
+      },
+      true
+    );
+  }
+
   function boot() {
     init();
+    bindCartHoverSync();
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
     document.addEventListener("ShoptetDOMPageContentLoaded", schedule);
     document.addEventListener("ShoptetDOMSearchResultsLoaded", schedule);
     document.addEventListener("ShoptetDataLayerUpdated", scheduleCartSync);
+    document.addEventListener("ShoptetDOMCartLoaded", scheduleCartSync);
+    document.addEventListener("ShoptetCartUpdated", scheduleCartSync);
     window.addEventListener("load", schedule);
   }
 
