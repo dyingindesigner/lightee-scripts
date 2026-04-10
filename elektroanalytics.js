@@ -293,6 +293,21 @@
         var euros = tryCartEuros();
         if (euros != null) cm.cart_eur = euros;
         pushEvent("cart_step", p, cm);
+        /* Cena na /kosik/ sa často vykreslí až po chvíli — druhý pokus bez duplicity kľúča v storage */
+        if (step === "cart") {
+          setTimeout(function () {
+            try {
+              if (!/^\/kosik/i.test(location.pathname)) return;
+              var euros2 = tryCartEuros();
+              if (euros2 == null) return;
+              pushEvent("cart_step", pathNow(), {
+                step: "cart",
+                cart_eur: euros2,
+                reason: "deferred_price",
+              });
+            } catch (eDef) {}
+          }, 700);
+        }
       }
     }
 
