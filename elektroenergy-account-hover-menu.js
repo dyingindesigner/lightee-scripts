@@ -44,6 +44,14 @@
   }
 
   function findAccountTrigger() {
+    /** Elektroenergy / Shoptet šablóna: účet v hornej lište */
+    var direct = document.querySelector(
+      "a.top-nav-button-account, a.top-nav-button[href='/klient/'], a.top-nav-button[href='/klient']"
+    );
+    if (direct && !direct.closest(".login-widget") && hrefIsClientAccountRoot(direct.getAttribute("href") || direct.href || "")) {
+      return direct;
+    }
+
     var selectors = [
       '[data-testid="linkAccountOverview"]',
       '[data-testid="linkAccount"]',
