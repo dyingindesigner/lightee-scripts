@@ -204,6 +204,7 @@
       } catch (e2) {}
     }
     var defaultCartSelectors = [
+      "#cart-wrapper .price-final",
       ".cart-summary strong.price-final",
       ".recapitulation-table .price",
       "[data-testid='cart-total']",
