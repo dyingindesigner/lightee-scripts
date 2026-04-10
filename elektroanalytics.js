@@ -11,8 +11,8 @@
  *       siteKey: "elektroenergy",
  *       ingestSecret: "rovnaké ako ANALYTICS_INGEST_SECRET vo funkcii",
  *       supabaseAnonKey: "anon/public key z Settings → API (ak má funkcia zapnuté JWT)",
- *       // voliteľné: getCustomerId() — vlastné ID; customerIdSelector — CSS selektor na DOM;
- *       // getCartEuros() / cartTotalSelector — suma košíka v € (inak sa skúsia predvolené selektory)
+ *       // voliteľné: getCustomerId / customerIdSelector; getCustomerLabel / customerNameSelector;
+ *       // getCartEuros / cartTotalSelector — košík € (inak predvolené selektory)
  *       // checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec
  *     };
  *   </script>
@@ -103,13 +103,18 @@
       } catch (e) {}
     }
     try {
-      if (window.shoptet && window.shoptet.customer && window.shoptet.customer.id != null) {
-        return String(window.shoptet.customer.id).slice(0, 128);
+      var c1 = window.shoptet && window.shoptet.customer;
+      if (c1) {
+        if (c1.id != null && String(c1.id).length > 0) return String(c1.id).slice(0, 128);
+        /* Shoptet 2 často posiela len guid + email (bez id / mena) */
+        if (c1.guid != null && String(c1.guid).length > 0) return String(c1.guid).slice(0, 128);
       }
     } catch (e2) {}
     try {
-      if (window.Shoptet && window.Shoptet.customer && window.Shoptet.customer.id != null) {
-        return String(window.Shoptet.customer.id).slice(0, 128);
+      var c2 = window.Shoptet && window.Shoptet.customer;
+      if (c2) {
+        if (c2.id != null && String(c2.id).length > 0) return String(c2.id).slice(0, 128);
+        if (c2.guid != null && String(c2.guid).length > 0) return String(c2.guid).slice(0, 128);
       }
     } catch (e3) {}
     return null;
@@ -125,6 +130,51 @@
     var discovered = discoverCustomerId();
     if (discovered) return discovered;
     return null;
+  }
+
+  /**
+   * Zobrazené meno pre dashboard (customer_label v ingeste). Len ak je používateľ prihlásený.
+   */
+  function discoverCustomerLabel() {
+    if (typeof cfg.customerNameSelector === "string" && cfg.customerNameSelector) {
+      try {
+        var nel = document.querySelector(cfg.customerNameSelector);
+        if (nel && nel.textContent) {
+          var tx = String(nel.textContent).replace(/\s+/g, " ").trim();
+          if (tx) return tx.slice(0, 120);
+        }
+      } catch (e) {}
+    }
+    try {
+      var sc = window.shoptet && window.shoptet.customer;
+      if (sc) {
+        if (sc.fullName && String(sc.fullName).trim()) return String(sc.fullName).trim().slice(0, 120);
+        var fn = (sc.firstName && String(sc.firstName).trim()) || "";
+        var ln = (sc.lastName && String(sc.lastName).trim()) || "";
+        var comb = (fn + " " + ln).trim();
+        if (comb) return comb.slice(0, 120);
+        /* Ak Shoptet neposiela meno, zobraz aspoň e-mail (Elektroenergy: len guid + email) */
+        if (sc.email && String(sc.email).trim()) return String(sc.email).trim().slice(0, 120);
+      }
+    } catch (e2) {}
+    try {
+      var Sc = window.Shoptet && window.Shoptet.customer;
+      if (Sc) {
+        if (Sc.fullName && String(Sc.fullName).trim()) return String(Sc.fullName).trim().slice(0, 120);
+        if (Sc.email && String(Sc.email).trim()) return String(Sc.email).trim().slice(0, 120);
+      }
+    } catch (e3) {}
+    return null;
+  }
+
+  function resolveCustomerLabel() {
+    try {
+      if (typeof cfg.getCustomerLabel === "function") {
+        var gl = cfg.getCustomerLabel();
+        if (gl != null && String(gl).trim()) return String(gl).trim().slice(0, 120);
+      }
+    } catch (e) {}
+    return discoverCustomerLabel();
   }
 
   function tryCartEuros() {
@@ -191,12 +241,14 @@
     if (QUEUE.length === 0) return;
     var batch = QUEUE.splice(0, 40);
     var cid = resolveCustomerId();
+    var clabel = cid ? resolveCustomerLabel() : null;
     var payloadObj = {
       site_key: cfg.siteKey,
       session_key: sessionKey,
       events: batch,
     };
     if (cid) payloadObj.customer_id = cid;
+    if (clabel) payloadObj.customer_label = clabel;
     var payload = JSON.stringify(payloadObj);
     var url = cfg.endpoint;
     var headers = {
