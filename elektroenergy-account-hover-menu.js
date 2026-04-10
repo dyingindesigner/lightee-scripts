@@ -1,6 +1,7 @@
 /**
  * Elektroenergy.sk — desktop hover menu pod „Môj účet“
- * Vanilla JS, bez závislostí. Na mobile/tablete sa nespúšťa (hover + pointer fine + min šírka).
+ * Vanilla JS, bez závislostí. Šírka ≥ 992px; bez (pointer: fine) kvôli notebookom s dotykom.
+ * Opakované hľadanie triggera (MutationObserver) — Shoptet niekedy doplní účet až po načítaní / prihlásení.
  */
 (function () {
   "use strict";
@@ -8,6 +9,7 @@
   var STORAGE_STYLE = "ee-account-hover-menu-style";
   var PANEL_CLASS = "ee-account-hover-panel";
   var OPEN_CLASS = "ee-account-hover-open";
+  var ATTR_MOUNTED = "data-ee-acc-hover-mounted";
 
   var LINKS = [
     { href: "https://www.elektroenergy.sk/klient/objednavky/", text: "Objednávky" },
@@ -17,25 +19,76 @@
     { href: "https://www.elektroenergy.sk/logout/", text: "Odhlásiť", isButton: true },
   ];
 
-  function isDesktopHover() {
-    return window.matchMedia("(min-width: 992px) and (hover: hover) and (pointer: fine)").matches;
+  /** PC layout: široký viewport; nevyžadujeme pointer:fine (hybridné notebooky). */
+  function isDesktopLayout() {
+    return window.matchMedia("(min-width: 992px)").matches;
+  }
+
+  function hrefIsClientAccountRoot(href) {
+    if (!href || href === "#" || href.indexOf("javascript:") === 0) return false;
+    if (href === "/klient" || href === "/klient/") return true;
+    try {
+      var u = new URL(href, window.location.origin);
+      if (u.origin !== window.location.origin) return false;
+      var p = u.pathname.replace(/\/+$/, "") || "/";
+      return p === "/klient";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function resolveClickable(el) {
+    if (!el) return null;
+    if (el.tagName === "A" || el.tagName === "BUTTON") return el;
+    return el.closest("a") || el.closest("button");
   }
 
   function findAccountTrigger() {
-    var el = document.querySelector('a[data-testid="linkAccountOverview"]');
-    if (el) return el;
-    var candidates = document.querySelectorAll(
-      '.user-action a[href="/klient/"], .user-action a[href="/klient"], .user-action-in a[href="/klient/"], .user-action-in a[href="/klient"], header a[href="/klient/"], header a[href="/klient"]'
-    );
-    var i, a, t;
-    for (i = 0; i < candidates.length; i++) {
-      a = candidates[i];
-      if (a.closest(".login-widget")) continue;
-      if (/zabudnute-heslo|registracia/i.test(a.getAttribute("href") || "")) continue;
-      t = (a.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
-      if (/m[oô]j\s*účet|moj\s*ucet|m[uů]j\s*účet/i.test(t)) return a;
+    var selectors = [
+      '[data-testid="linkAccountOverview"]',
+      '[data-testid="linkAccount"]',
+      "a.user-login",
+    ];
+    var i;
+    for (i = 0; i < selectors.length; i++) {
+      var raw = document.querySelector(selectors[i]);
+      var el = resolveClickable(raw);
+      if (!el || el.closest(".login-widget")) continue;
+      if (el.tagName === "A" && !hrefIsClientAccountRoot(el.getAttribute("href") || "")) continue;
+      return el;
     }
-    return null;
+
+    var roots = document.querySelectorAll(".user-action-in, .user-action, .overall-wrapper .container, header");
+    var r, j, nodes, n, href, t;
+
+    for (r = 0; r < roots.length; r++) {
+      nodes = roots[r].querySelectorAll("a[href], button");
+      for (j = 0; j < nodes.length; j++) {
+        n = nodes[j];
+        if (n.closest(".login-widget")) continue;
+        href = n.getAttribute("href") || "";
+        t = (n.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (/m[oô]j\s*účet|moj\s*ucet|m[uů]j\s*účet|m[uů]j\s*ucet/.test(t)) {
+          if (n.tagName === "BUTTON" || hrefIsClientAccountRoot(href)) return n;
+        }
+      }
+    }
+
+    var candidates = document.querySelectorAll(
+      '.user-action a[href], .user-action-in a[href], header .user-action a[href], header a[href*="klient"]'
+    );
+    var best = null;
+    for (i = 0; i < candidates.length; i++) {
+      n = candidates[i];
+      if (n.closest(".login-widget")) continue;
+      href = n.getAttribute("href") || "";
+      if (!hrefIsClientAccountRoot(href)) continue;
+      if (/zabudnute-heslo|registracia|zapomenute|signup/i.test(href)) continue;
+      t = (n.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+      if (/prihl[aá]s/i.test(t) && !/účet|ucet/i.test(t)) continue;
+      if (/účet|ucet/i.test(t) || !best) best = n;
+    }
+    return best;
   }
 
   function injectStyles() {
@@ -80,11 +133,18 @@
     panel.style.left = r.left + "px";
   }
 
-  function init() {
-    if (!isDesktopHover()) return;
+  var attachScheduled = false;
+  var observerStarted = false;
+
+  function attachMenu() {
+    if (document.documentElement.getAttribute(ATTR_MOUNTED) === "1") return;
+
+    if (!isDesktopLayout()) return;
 
     var trigger = findAccountTrigger();
     if (!trigger) return;
+
+    document.documentElement.setAttribute(ATTR_MOUNTED, "1");
 
     injectStyles();
 
@@ -119,7 +179,7 @@
     var hideTimer = null;
 
     function openPanel() {
-      if (!isDesktopHover()) return;
+      if (!isDesktopLayout()) return;
       clearTimeout(hideTimer);
       positionPanel(trigger, panel);
       panel.classList.add(OPEN_CLASS);
@@ -137,28 +197,20 @@
     }
 
     trigger.setAttribute("aria-haspopup", "menu");
-    trigger.setAttribute("aria-expanded", "false");
+    if (!trigger.getAttribute("aria-expanded")) trigger.setAttribute("aria-expanded", "false");
 
-    trigger.addEventListener(
+    trigger.addEventListener("mouseenter", openPanel, false);
+    trigger.addEventListener("mouseleave", scheduleClose, false);
+    panel.addEventListener(
       "mouseenter",
       function () {
-        openPanel();
+        clearTimeout(hideTimer);
       },
       false
     );
-    trigger.addEventListener("mouseleave", scheduleClose, false);
-    panel.addEventListener("mouseenter", function () {
-      clearTimeout(hideTimer);
-    }, false);
     panel.addEventListener("mouseleave", scheduleClose, false);
 
-    trigger.addEventListener(
-      "focus",
-      function () {
-        openPanel();
-      },
-      true
-    );
+    trigger.addEventListener("focus", openPanel, true);
     trigger.addEventListener("blur", scheduleClose, false);
 
     window.addEventListener(
@@ -169,7 +221,7 @@
       true
     );
     window.addEventListener("resize", function () {
-      if (!isDesktopHover()) {
+      if (!isDesktopLayout()) {
         closePanel();
         return;
       }
@@ -184,9 +236,42 @@
     });
   }
 
+  function scheduleAttach() {
+    if (attachScheduled) return;
+    attachScheduled = true;
+    window.requestAnimationFrame(function () {
+      attachScheduled = false;
+      try {
+        attachMenu();
+      } catch (err) {}
+    });
+  }
+
+  function startObserver() {
+    if (observerStarted) return;
+    observerStarted = true;
+    var obs = new MutationObserver(function () {
+      if (document.documentElement.getAttribute(ATTR_MOUNTED) === "1") {
+        obs.disconnect();
+        return;
+      }
+      scheduleAttach();
+    });
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function boot() {
+    scheduleAttach();
+    startObserver();
+    setTimeout(scheduleAttach, 400);
+    setTimeout(scheduleAttach, 1500);
+    setTimeout(scheduleAttach, 3500);
+    window.addEventListener("load", scheduleAttach);
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    init();
+    boot();
   }
 })();
