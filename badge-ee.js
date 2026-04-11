@@ -1,8 +1,9 @@
 /**
- * Elektroenergy.sk — badge pri „Do košíka“ na listingoch: koľko ks danej ceny (priceId) je už v košíku.
- * Badge je v DOM priamo na tlačidle (nie globálny overlay), aby ostal nalepený pri skrolovaní / karuseli / transformoch.
+ * Elektroenergy.sk — badge pri „Do košíka“: koľko ks danej ceny (priceId) je už v košíku.
+ * Listing (.product), B2B karty, aj detail produktu ([data-testid="divAddToCart"]).
+ * Badge je v DOM na tlačidle (scroll / karusel / transform).
  *
- * B2C: často add-to-cart-button; B2B: btn btn-cart + data-testid (productarrows).
+ * B2C: add-to-cart-button; B2B listing: btn btn-cart + data-testid; PDP: add-to-cart-button v .add-to-cart.
  */
 (function () {
   var BADGE_CLASS = "ee-cart-badge";
@@ -94,17 +95,46 @@
     return sum;
   }
 
-  function isListingAddToCartButton(btn) {
+  function isExcludedCartContext(btn) {
+    return !!btn.closest(
+      "#cart-widget,.cart-widget,.cart-table,.order-summary-top,#checkoutSidebar,.extras-col"
+    );
+  }
+
+  /**
+   * PDP: tlačidlo v [data-testid="divAddToCart"] (nie je v .product).
+   * Listing: .product, nie blok detailu (p-detail-inner…).
+   */
+  function shouldShowBadge(btn) {
     if (!btn) return false;
     if (btn.getAttribute("data-testid") !== "buttonAddToCart" && !btn.classList.contains("add-to-cart-button")) return false;
-    if (!btn.closest(".product")) return false;
-    if (
-      btn.closest(
-        "#cart-widget,.cart-widget,.cart-table,.order-summary-top,#checkoutSidebar,.p-detail-inner,.product-detail,.type-detail,.extras-col"
-      )
-    )
-      return false;
-    return true;
+    if (isExcludedCartContext(btn)) return false;
+
+    if (btn.closest('[data-testid="divAddToCart"]')) return true;
+
+    if (btn.closest(".product")) {
+      if (btn.closest(".p-detail-inner,.product-detail,.type-detail")) return false;
+      return true;
+    }
+
+    return false;
+  }
+
+  function priceIdInputForButton(btn) {
+    var form = btn.closest("form");
+    var el = form && form.querySelector("input[name='priceId']");
+    if (el && el.value) return el;
+    var box = btn.closest('[data-testid="divAddToCart"], .add-to-cart');
+    if (box) {
+      el = box.querySelector("input[name='priceId']");
+      if (el && el.value) return el;
+    }
+    var detail = btn.closest(".p-detail-inner,.product-detail,#product-detail,.type-detail");
+    if (detail) {
+      el = detail.querySelector("input[name='priceId']");
+      if (el && el.value) return el;
+    }
+    return null;
   }
 
   function renderBadges() {
@@ -112,11 +142,10 @@
     clearBadges();
 
     var products = document.querySelectorAll(
-      '.product button[data-testid="buttonAddToCart"], .product button.add-to-cart-button'
+      'button[data-testid="buttonAddToCart"], button.add-to-cart-button'
     );
     var i,
       btn,
-      form,
       priceIdEl,
       priceId,
       qty,
@@ -125,10 +154,8 @@
 
     for (i = 0; i < products.length; i++) {
       btn = products[i];
-      if (!isListingAddToCartButton(btn)) continue;
-      form = btn.closest("form");
-      if (!form) continue;
-      priceIdEl = form.querySelector("input[name='priceId']");
+      if (!shouldShowBadge(btn)) continue;
+      priceIdEl = priceIdInputForButton(btn);
       if (!priceIdEl || !priceIdEl.value) continue;
       priceId = priceIdEl.value;
       qty = quantityForPriceId(priceId);
