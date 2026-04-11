@@ -1,15 +1,13 @@
 /**
  * Elektroenergy.sk — badge pri „Do košíka“ na listingoch: koľko ks danej ceny (priceId) je už v košíku.
- * Nie je to súčet všetkých položiek v košíku (ten má téma v hlavičke); ide o per-produkt indikátor.
+ * Badge je v DOM priamo na tlačidle (nie globálny overlay), aby ostal nalepený pri skrolovaní / karuseli / transformoch.
  *
- * Založené na lightee-scripts/badgescript.js; upravené podľa productarrows.js:
- * - posledný záznam shoptet.cart v dataLayer (nie dataLayer.find — ten môže byť zastaralý)
- * - agregácia quantity pri viacerých riadkoch rovnakého priceId
- * - Shoptet udalosti: ShoptetCartUpdated, ShoptetDataLayerUpdated, … (nie len shoptet.cart.updated)
+ * B2C: často add-to-cart-button; B2B: btn btn-cart + data-testid (productarrows).
  */
 (function () {
   var BADGE_CLASS = "ee-cart-badge";
-  var BADGE_CONTAINER_ID = "ee-cart-badge-overlay";
+  var HOST_CLASS = "ee-cart-badge-host";
+  var STYLE_ID = "ee-cart-badge-styles";
   var timer = null;
 
   function schedule(fn, ms) {
@@ -17,21 +15,38 @@
     timer = setTimeout(fn, ms || 80);
   }
 
-  function getContainer() {
-    var c = document.getElementById(BADGE_CONTAINER_ID);
-    if (!c) {
-      c = document.createElement("div");
-      c.id = BADGE_CONTAINER_ID;
-      c.setAttribute("aria-hidden", "true");
-      c.style.position = "absolute";
-      c.style.top = "0";
-      c.style.left = "0";
-      c.style.width = "100%";
-      c.style.pointerEvents = "none";
-      c.style.zIndex = "99999";
-      document.body.appendChild(c);
-    }
-    return c;
+  function ensureStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    var s = document.createElement("style");
+    s.id = STYLE_ID;
+    s.textContent =
+      "button." +
+      HOST_CLASS +
+      "{position:relative!important;overflow:visible!important;z-index:2}" +
+      "button." +
+      HOST_CLASS +
+      " ." +
+      BADGE_CLASS +
+      "{position:absolute;top:0;right:0;box-sizing:border-box;min-width:1.125rem;height:1.125rem;padding:0 .28rem;margin:0;" +
+      "line-height:1.125rem;border-radius:999px;background:#d92d20;color:#fff;" +
+      "font:700 11px/1.125rem system-ui,-apple-system,sans-serif;text-align:center;white-space:nowrap;" +
+      "border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.25);" +
+      "transform:translate(30%,-35%);pointer-events:none}" +
+      "button." +
+      HOST_CLASS +
+      " ." +
+      BADGE_CLASS +
+      ".ee-cart-badge--wide{min-width:1.375rem;height:1.25rem;line-height:1.25rem;padding:0 5px;font-size:10px}";
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function clearBadges() {
+    document.querySelectorAll("." + BADGE_CLASS).forEach(function (el) {
+      el.remove();
+    });
+    document.querySelectorAll("button." + HOST_CLASS).forEach(function (btn) {
+      btn.classList.remove(HOST_CLASS);
+    });
   }
 
   function getShoptetCartArray() {
@@ -74,22 +89,38 @@
     return sum;
   }
 
-  function renderBadges() {
-    var container = getContainer();
-    container.innerHTML = "";
+  function isListingAddToCartButton(btn) {
+    if (!btn) return false;
+    if (btn.getAttribute("data-testid") !== "buttonAddToCart" && !btn.classList.contains("add-to-cart-button")) return false;
+    if (!btn.closest(".product")) return false;
+    if (
+      btn.closest(
+        "#cart-widget,.cart-widget,.cart-table,.order-summary-top,#checkoutSidebar,.p-detail-inner,.product-detail,.type-detail,.extras-col"
+      )
+    )
+      return false;
+    return true;
+  }
 
-    var products = document.querySelectorAll("button.add-to-cart-button");
+  function renderBadges() {
+    ensureStyles();
+    clearBadges();
+
+    var products = document.querySelectorAll(
+      '.product button[data-testid="buttonAddToCart"], .product button.add-to-cart-button'
+    );
     var i,
       btn,
       form,
       priceIdEl,
       priceId,
       qty,
-      rect,
-      badge;
+      badge,
+      label;
 
     for (i = 0; i < products.length; i++) {
       btn = products[i];
+      if (!isListingAddToCartButton(btn)) continue;
       form = btn.closest("form");
       if (!form) continue;
       priceIdEl = form.querySelector("input[name='priceId']");
@@ -98,26 +129,15 @@
       qty = quantityForPriceId(priceId);
       if (qty <= 0) continue;
 
-      rect = btn.getBoundingClientRect();
-      badge = document.createElement("div");
+      btn.classList.add(HOST_CLASS);
+      badge = document.createElement("span");
       badge.className = BADGE_CLASS;
-      badge.textContent = qty > 99 ? "99+" : String(Math.round(qty));
+      badge.setAttribute("aria-hidden", "true");
+      label = qty > 99 ? "99+" : String(Math.round(qty));
+      badge.textContent = label;
       badge.title = qty + " ks v ko\u0161\u00edku";
-      badge.style.position = "absolute";
-      badge.style.top = rect.top + window.scrollY - 8 + "px";
-      badge.style.left = rect.left + window.scrollX + rect.width - 12 + "px";
-      badge.style.minWidth = "1.25rem";
-      badge.style.height = "1.25rem";
-      badge.style.lineHeight = "1.25rem";
-      badge.style.padding = "0 4px";
-      badge.style.borderRadius = "999px";
-      badge.style.background = "#c41e3a";
-      badge.style.color = "#fff";
-      badge.style.fontSize = "11px";
-      badge.style.fontWeight = "700";
-      badge.style.textAlign = "center";
-      badge.style.boxShadow = "0 1px 2px rgba(0,0,0,.2)";
-      container.appendChild(badge);
+      if (label.length > 2) badge.classList.add("ee-cart-badge--wide");
+      btn.appendChild(badge);
     }
   }
 
@@ -140,15 +160,8 @@
         schedule(renderBadges, 60);
       });
     });
-    window.addEventListener(
-      "scroll",
-      function () {
-        schedule(renderBadges, 40);
-      },
-      { passive: true }
-    );
     window.addEventListener("resize", function () {
-      schedule(renderBadges, 60);
+      schedule(renderBadges, 120);
     });
   }
 
