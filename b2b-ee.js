@@ -24,6 +24,20 @@
   }
 
   /**
+   * Text za prvou plnou cenou v SK tvare (medzery ako tisícky), napr. „€1 221,00 / ks“ → „/ ks“.
+   * Starý regex bral len „€“ + krátké \d+ → pri „€1 221,00“ ostalo „ 221,00“ a lepilo sa k net cene.
+   */
+  function suffixAfterMainPrice(mt) {
+    var t = n(mt);
+    if (!t) return "";
+    var m = t.match(/^\s*\u20ac\s*(?:\d{1,3}(?:\s\d{3})*|\d+),\d{1,2}\s*(.*)$/);
+    if (m) return (m[1] || "").trim();
+    m = t.match(/^\s*(?:\d{1,3}(?:\s\d{3})*|\d+),\d{1,2}\s*\u20ac\s*(.*)$/);
+    if (m) return (m[1] || "").trim();
+    return "";
+  }
+
+  /**
    * Hrubá suma pre B2B prepočet: ak je text stále naša posledná „net“ úprava, berieme uloženú hodnotu.
    * Ak sa text zmenil (Shoptet dopočítal košík / nový riadok), znova parsujeme číslo z DOM — inak ostane
    * staré data-ee-gross-original a súčty za „5 položiek“ sa držia aj po pridaní ďalších.
@@ -124,8 +138,9 @@
       var mark = mv + "|" + xv;
       if (box.dataset.eeSwap === mark) return;
 
-      var suf = mt.replace(/^.*?(\u20ac\s*\d+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?\s*\u20ac)/, "").trim();
-      main.textContent = f(xv) + (suf && suf.length < 12 ? " " + suf : "");
+      var suf = suffixAfterMainPrice(mt);
+      if (suf.length > 48) suf = "";
+      main.textContent = f(xv) + (suf ? " " + suf : "");
       ex.textContent = f(mv) + " s DPH";
       ex.style.opacity = ".75";
       ex.style.fontSize = ".9em";
