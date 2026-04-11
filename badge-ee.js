@@ -27,16 +27,16 @@
       HOST_CLASS +
       " ." +
       BADGE_CLASS +
-      "{position:absolute;top:0;right:0;box-sizing:border-box;min-width:1.125rem;height:1.125rem;padding:0 .28rem;margin:0;" +
-      "line-height:1.125rem;border-radius:999px;background:#d92d20;color:#fff;" +
-      "font:700 11px/1.125rem system-ui,-apple-system,sans-serif;text-align:center;white-space:nowrap;" +
-      "border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.25);" +
-      "transform:translate(30%,-35%);pointer-events:none}" +
+      "{position:absolute;top:-3px;right:-3px;box-sizing:border-box;min-width:1.75rem;height:1.75rem;padding:0 8px;margin:0;" +
+      "line-height:1.75rem;border-radius:999px;background:#d92d20;color:#fff;" +
+      "font:700 15px/1.75rem system-ui,-apple-system,'Segoe UI',sans-serif;text-align:center;white-space:nowrap;" +
+      "border:3px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3);" +
+      "transform:translate(14%,-20%);pointer-events:none;-webkit-font-smoothing:antialiased}" +
       "button." +
       HOST_CLASS +
       " ." +
       BADGE_CLASS +
-      ".ee-cart-badge--wide{min-width:1.375rem;height:1.25rem;line-height:1.25rem;padding:0 5px;font-size:10px}";
+      ".ee-cart-badge--wide{min-width:2.125rem;height:1.75rem;padding:0 9px;font-size:14px;line-height:1.75rem}";
     (document.head || document.documentElement).appendChild(s);
   }
 
