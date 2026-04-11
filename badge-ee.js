@@ -7,7 +7,8 @@
 (function () {
   var BADGE_CLASS = "ee-cart-badge";
   var HOST_CLASS = "ee-cart-badge-host";
-  var STYLE_ID = "ee-cart-badge-styles";
+  /** px namiesto rem — na Shoptet môže html/font-size zmeniť rem a badge vyzerá miniatúrne. */
+  var STYLE_ID = "ee-cart-badge-styles-v3";
   var timer = null;
 
   function schedule(fn, ms) {
@@ -16,6 +17,10 @@
   }
 
   function ensureStyles() {
+    var legacy = document.getElementById("ee-cart-badge-styles");
+    if (legacy) legacy.remove();
+    legacy = document.getElementById("ee-cart-badge-styles-v2");
+    if (legacy) legacy.remove();
     if (document.getElementById(STYLE_ID)) return;
     var s = document.createElement("style");
     s.id = STYLE_ID;
@@ -27,16 +32,16 @@
       HOST_CLASS +
       " ." +
       BADGE_CLASS +
-      "{position:absolute;top:-3px;right:-3px;box-sizing:border-box;min-width:1.75rem;height:1.75rem;padding:0 8px;margin:0;" +
-      "line-height:1.75rem;border-radius:999px;background:#d92d20;color:#fff;" +
-      "font:700 15px/1.75rem system-ui,-apple-system,'Segoe UI',sans-serif;text-align:center;white-space:nowrap;" +
+      "{position:absolute;top:0;right:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;" +
+      "min-width:28px;height:28px;padding:0 8px;margin:0;border-radius:999px;background:#d92d20;color:#fff;" +
+      "font:700 15px system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1;text-align:center;white-space:nowrap;" +
       "border:3px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3);" +
-      "transform:translate(14%,-20%);pointer-events:none;-webkit-font-smoothing:antialiased}" +
+      "transform:translate(28%,-32%);pointer-events:none;-webkit-font-smoothing:antialiased}" +
       "button." +
       HOST_CLASS +
       " ." +
       BADGE_CLASS +
-      ".ee-cart-badge--wide{min-width:2.125rem;height:1.75rem;padding:0 9px;font-size:14px;line-height:1.75rem}";
+      ".ee-cart-badge--wide{min-width:36px;height:28px;padding:0 9px;font-size:14px}";
     (document.head || document.documentElement).appendChild(s);
   }
 
