@@ -20,6 +20,8 @@
   var CFG = window.EE_ATYPICAL_SHIPPING || {};
   var NOTICE_CLASS = 'ee-atypical-shipping-notice';
   var DATA_ATTR = 'data-ee-atyp-notice';
+  var CONTACT_PHONE = CFG.contactPhone || '+421908134795';
+  var CONTACT_EMAIL = CFG.contactEmail || 'info@elektroenergy.sk';
 
   function log() {
     if (CFG.debug) {
@@ -67,20 +69,58 @@
       '{background:#fff8e6;border:1px solid #e6c200;border-radius:6px;padding:12px 14px;margin:12px 0;font-size:14px;line-height:1.45;color:#5c4a00;}' +
       '.' +
       NOTICE_CLASS +
-      ' strong{display:block;margin-bottom:4px;}';
+      ' strong{display:block;margin-bottom:4px;}' +
+      '.' +
+      NOTICE_CLASS +
+      ' a{color:#5c4a00;text-decoration:underline;}' +
+      '.' +
+      NOTICE_CLASS +
+      ' ul{margin:8px 0 0 18px;padding:0;}';
     document.head.appendChild(s);
   }
 
-  function buildNotice() {
+  function escapeHtml(text) {
+    return String(text || '').replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  function normalizePhoneForHref(phone) {
+    return String(phone || '').replace(/[^\d+]/g, '');
+  }
+
+  function contactLinksHtml() {
+    var telHref = normalizePhoneForHref(CONTACT_PHONE);
+    return (
+      '<a href="tel:' +
+      escapeHtml(telHref) +
+      '">' +
+      escapeHtml(CONTACT_PHONE) +
+      '</a> alebo <a href="mailto:' +
+      escapeHtml(CONTACT_EMAIL) +
+      '">' +
+      escapeHtml(CONTACT_EMAIL) +
+      '</a>'
+    );
+  }
+
+  function defaultProductBody() {
+    return (
+      'Tento produkt má atypickú dopravu. Spôsob a cena doručenia sú na dohode (' +
+      contactLinksHtml() +
+      ').'
+    );
+  }
+
+  function buildNotice(bodyHtml, attrValue) {
     var div = document.createElement('div');
     div.className = NOTICE_CLASS;
-    div.setAttribute(DATA_ATTR, '1');
+    div.setAttribute(DATA_ATTR, attrValue || '1');
     div.innerHTML =
       '<strong>' +
       (CFG.messageTitle || 'Upozornenie k doprave') +
       '</strong>' +
-      (CFG.messageBody ||
-        'Tento produkt má atypickú dopravu. Spôsob a cena doručenia sú na dohode (emailom alebo telefonicky). Pri väčších skriniach odporúčame osobný odber alebo dohodnutú prepravu.');
+      (bodyHtml || CFG.messageBody || defaultProductBody());
     return div;
   }
 
@@ -122,17 +162,14 @@
     }
   }
 
-  function initCart(set) {
-    var container =
-      document.querySelector('.cart-table') ||
-      document.querySelector('.cart-content') ||
-      document.querySelector('#cart') ||
-      document.body;
+  function collectCartAtypicalItems(container, set) {
     var rows = container.querySelectorAll('tr[data-micro="cartItem"], .cart-item, .removeable');
     if (!rows.length) {
       rows = container.querySelectorAll('table tbody tr');
     }
-    var any = false;
+
+    var items = [];
+    var seen = {};
     for (var r = 0; r < rows.length; r++) {
       var row = rows[r];
       var text = row.textContent || '';
@@ -149,21 +186,53 @@
           }
         }
       }
-      if (!hit || !set.has(hit)) continue;
-      if (row.querySelector('.' + NOTICE_CLASS)) continue;
-      any = true;
-      ensureStyles();
-      var note = buildNotice();
-      note.style.marginTop = '8px';
-      row.parentNode.insertBefore(note, row.nextSibling);
+      if (!hit || !set.has(hit) || seen[hit]) continue;
+      seen[hit] = true;
+      items.push({
+        code: hit,
+        name: link ? (link.textContent || '').trim() : hit,
+        href: href
+      });
     }
-    if (any) {
-      var summary = document.querySelector('.cart-summary, .co-box, .cart-buttons');
-      if (summary && !document.querySelector('.cart-content [' + DATA_ATTR + '="banner"]')) {
-        var banner = buildNotice();
-        banner.setAttribute(DATA_ATTR, 'banner');
-        summary.parentNode.insertBefore(banner, summary);
+    return items;
+  }
+
+  function buildCartBody(items) {
+    var intro =
+      items.length === 1
+        ? 'V košíku máte produkt s atypickou dopravou:'
+        : 'V košíku máte produkty s atypickou dopravou:';
+    var list = '<ul>';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var safeName = escapeHtml(item.name || item.code);
+      if (item.href) {
+        list += '<li><a href="' + escapeHtml(item.href) + '">' + safeName + '</a></li>';
+      } else {
+        list += '<li>' + safeName + '</li>';
       }
+    }
+    list += '</ul>';
+    return intro + list + 'Spôsob a cena doručenia sú na dohode (' + contactLinksHtml() + ').';
+  }
+
+  function initCart(set) {
+    if (document.body.querySelector('[' + DATA_ATTR + '="cart"]')) return;
+    var container =
+      document.querySelector('.cart-table') ||
+      document.querySelector('.cart-content') ||
+      document.querySelector('#cart') ||
+      document.body;
+    var items = collectCartAtypicalItems(container, set);
+    if (!items.length) return;
+
+    ensureStyles();
+    var banner = buildNotice(CFG.cartMessageBody || buildCartBody(items), 'cart');
+    var summary = document.querySelector('.cart-summary, .co-box, .cart-buttons');
+    if (summary && summary.parentNode) {
+      summary.parentNode.insertBefore(banner, summary);
+    } else {
+      container.insertBefore(banner, container.firstChild);
     }
   }
 
