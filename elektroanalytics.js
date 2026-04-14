@@ -14,6 +14,7 @@
  *       // voliteľné: getCustomerId / customerIdSelector; getCustomerLabel / customerNameSelector;
  *       // getCartEuros / cartTotalSelector — košík € (inak predvolené selektory)
  *       // checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec, heartbeatIdleSec (predvolene 30)
+ *       // requireMarketingConsent, hasMarketingConsent, consentCookieNames, consentPollMs, onConsentChanged
  *       // heartbeat len pri viditeľnej karte a ak nebola nečinnosť dlhšie ako heartbeatIdleSec — šetrí DB (B2B katalóg).
  *     };
  *   </script>
@@ -53,10 +54,95 @@
     }
   }
 
-  var sessionKey = getSessionKey();
+  var sessionKey = null;
+  function ensureSessionKey() {
+    if (!sessionKey) sessionKey = getSessionKey();
+    return sessionKey;
+  }
   var pathNow = function () {
     return location.pathname + location.search;
   };
+  /** --- Consent gate (marketing cookies) --- */
+  var requireMarketingConsent = cfg.requireMarketingConsent !== false;
+  var consentCookieNames = Array.isArray(cfg.consentCookieNames)
+    ? cfg.consentCookieNames
+    : ["cookie_consent_marketing", "consent_marketing", "cc_marketing"];
+  var consentGranted = !requireMarketingConsent;
+  var consentPollMs =
+    typeof cfg.consentPollMs === "number" && cfg.consentPollMs >= 500
+      ? Math.round(cfg.consentPollMs)
+      : 2000;
+  var consentPollTimer = null;
+
+  function parseCookieMap() {
+    var map = {};
+    try {
+      var raw = document.cookie || "";
+      if (!raw) return map;
+      var parts = raw.split(";");
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i].split("=");
+        var k = p.shift();
+        if (!k) continue;
+        var v = p.join("=");
+        map[decodeURIComponent(k.trim())] = decodeURIComponent((v || "").trim());
+      }
+    } catch (e) {}
+    return map;
+  }
+
+  function isTruthyConsentValue(v) {
+    var t = String(v || "")
+      .trim()
+      .toLowerCase();
+    return t === "1" || t === "true" || t === "yes" || t === "granted" || t === "allow";
+  }
+
+  function hasMarketingConsent() {
+    if (!requireMarketingConsent) return true;
+    try {
+      if (typeof cfg.hasMarketingConsent === "function") {
+        return !!cfg.hasMarketingConsent();
+      }
+    } catch (e0) {}
+    var cookies = parseCookieMap();
+    for (var i = 0; i < consentCookieNames.length; i++) {
+      var key = consentCookieNames[i];
+      if (Object.prototype.hasOwnProperty.call(cookies, key)) {
+        return isTruthyConsentValue(cookies[key]);
+      }
+    }
+    return false;
+  }
+
+  function refreshConsentState() {
+    var prev = consentGranted;
+    consentGranted = hasMarketingConsent();
+    if (!prev && consentGranted) {
+      handleLocation("consent_granted");
+      flush(false);
+    }
+  }
+
+  function initConsentWatch() {
+    refreshConsentState();
+    if (consentGranted || !requireMarketingConsent) return;
+    if (typeof cfg.onConsentChanged === "function") {
+      try {
+        cfg.onConsentChanged(function () {
+          refreshConsentState();
+        });
+      } catch (e) {}
+    }
+    consentPollTimer = setInterval(function () {
+      refreshConsentState();
+      if (consentGranted) {
+        clearInterval(consentPollTimer);
+        consentPollTimer = null;
+      }
+    }, consentPollMs);
+  }
+
 
   /** Predvolené pravidlá pre Shoptet SK — uprav podľa reálnych URL v obchode. */
   var defaultCheckoutRules = [
@@ -243,6 +329,7 @@
   }
 
   function pushEvent(event_type, path, meta) {
+    if (!consentGranted) return;
     QUEUE.push({
       event_type: event_type,
       path: path || pathNow(),
@@ -261,13 +348,14 @@
   }
 
   function flush(isUnload) {
+    if (!consentGranted) return;
     if (QUEUE.length === 0) return;
     var batch = QUEUE.splice(0, 40);
     var cid = resolveCustomerId();
     var clabel = cid ? resolveCustomerLabel() : null;
     var payloadObj = {
       site_key: cfg.siteKey,
-      session_key: sessionKey,
+      session_key: ensureSessionKey(),
       events: batch,
     };
     if (cid) payloadObj.customer_id = cid;
@@ -466,6 +554,7 @@
   }, heartbeatSec * 1000);
 
   window.addEventListener("pagehide", function () {
+    if (!consentGranted) return;
     tickActive();
     pushEvent("session_end", pathNow(), { active_ms: Math.round(activeMs) });
     flush(true);
@@ -501,5 +590,8 @@
     };
   }
 
-  handleLocation("initial");
+  initConsentWatch();
+  if (consentGranted) {
+    handleLocation("initial");
+  }
 })();
