@@ -13,7 +13,8 @@
  *       supabaseAnonKey: "anon/public key z Settings → API (ak má funkcia zapnuté JWT)",
  *       // voliteľné: getCustomerId / customerIdSelector; getCustomerLabel / customerNameSelector;
  *       // getCartEuros / cartTotalSelector — košík € (inak predvolené selektory)
- *       // checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec
+ *       // checkoutStepRules, thanksTest, clickSampleRate, heartbeatSec, heartbeatIdleSec (predvolene 30)
+ *       // heartbeat len pri viditeľnej karte a ak nebola nečinnosť dlhšie ako heartbeatIdleSec — šetrí DB (B2B katalóg).
  *     };
  *   </script>
  *   <script defer src=".../elektroanalytics.js"></script>
@@ -203,8 +204,29 @@
         if (parsed != null) return parsed;
       } catch (e2) {}
     }
+    /* Shoptet: prvý .price-final môže byť prázdny alebo riadková cena — súčet je často posledný alebo v súhrne */
+    try {
+      var wrap = document.querySelector("#cart-wrapper, .cart-wrapper, #cart");
+      if (wrap) {
+        var prefer = wrap.querySelector(
+          ".cart-summary .price-final, .cart-summary strong.price-final, tfoot .price-final, .recapitulation-total .price-final"
+        );
+        var pvPref = parseEurosFromElement(prefer);
+        if (pvPref != null) return pvPref;
+        var finals = wrap.querySelectorAll(".price-final");
+        if (finals.length > 0) {
+          var lastPv = parseEurosFromElement(finals[finals.length - 1]);
+          if (lastPv != null) return lastPv;
+          var maxPv = null;
+          for (var fi = 0; fi < finals.length; fi++) {
+            var one = parseEurosFromElement(finals[fi]);
+            if (one != null && (maxPv == null || one > maxPv)) maxPv = one;
+          }
+          if (maxPv != null) return maxPv;
+        }
+      }
+    } catch (eW) {}
     var defaultCartSelectors = [
-      "#cart-wrapper .price-final",
       ".cart-summary strong.price-final",
       ".recapitulation-table .price",
       "[data-testid='cart-total']",
@@ -273,6 +295,7 @@
 
   /** --- Page + funnel --- */
   function handleLocation(reason) {
+    bumpActivity();
     var p = pathNow();
     var pathname = location.pathname;
 
@@ -335,6 +358,7 @@
   document.addEventListener(
     "click",
     function (ev) {
+      bumpActivity();
       if (Math.random() > sample) return;
       var t = ev.target;
       if (!t || !t.closest) return;
@@ -349,8 +373,11 @@
 
   /** --- Trvanie relácie (aktívny čas v okne) --- */
   var heartbeatSec = Math.max(20, Math.min(120, cfg.heartbeatSec || 30));
+  var heartbeatIdleSec = Math.max(10, Math.min(600, cfg.heartbeatIdleSec || 30));
+  var heartbeatIdleMs = heartbeatIdleSec * 1000;
   var activeMs = 0;
   var lastTick = Date.now();
+  var lastActivityAt = Date.now();
 
   function tickActive() {
     var now = Date.now();
@@ -360,16 +387,72 @@
     lastTick = now;
   }
 
+  /** Po návrate z idle hneď jeden pulse, aby dashboard videl „je späť“. */
+  function bumpActivity() {
+    var now = Date.now();
+    var wasIdle = now - lastActivityAt > heartbeatIdleMs;
+    lastActivityAt = now;
+    if (wasIdle && document.visibilityState === "visible") {
+      tickActive();
+      var hbr = {
+        active_ms: Math.round(activeMs),
+        vis: document.visibilityState,
+      };
+      if (/^\/kosik/i.test(location.pathname)) {
+        var cer = tryCartEuros();
+        if (cer != null) hbr.cart_eur = cer;
+      }
+      pushEvent("heartbeat", pathNow(), hbr);
+      flush(false);
+    }
+  }
+
   setInterval(function () {
     tickActive();
   }, 5000);
 
   document.addEventListener("visibilitychange", function () {
     lastTick = Date.now();
+    if (document.visibilityState === "visible") {
+      bumpActivity();
+    }
   });
+
+  document.addEventListener("pointerdown", bumpActivity, true);
+  document.addEventListener("keydown", bumpActivity, true);
+  var lastScrollBump = 0;
+  document.addEventListener(
+    "scroll",
+    function () {
+      var n = Date.now();
+      if (n - lastScrollBump < 800) return;
+      lastScrollBump = n;
+      bumpActivity();
+    },
+    true
+  );
+  var lastMoveBump = 0;
+  document.addEventListener(
+    "mousemove",
+    function () {
+      var n = Date.now();
+      if (n - lastMoveBump < 2500) return;
+      lastMoveBump = n;
+      bumpActivity();
+    },
+    true
+  );
 
   setInterval(function () {
     tickActive();
+    /* Neťahaj pulse do DB pri skrytej karte / inom okne — typický B2B katalóg na pozadí. */
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    /* Bez interakcie dlhšie ako heartbeatIdleSec — žiadny pulse (šetrí DB). */
+    if (Date.now() - lastActivityAt > heartbeatIdleMs) {
+      return;
+    }
     var hb = {
       active_ms: Math.round(activeMs),
       vis: document.visibilityState,
