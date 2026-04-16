@@ -1,5 +1,5 @@
 (() => {
-  const STYLE_ID = "ee-native-sku-style-v3";
+  const STYLE_ID = "ee-native-sku-style-v4";
   const ROOT_SELECTOR = "#products.products-page.products-block";
   const BADGE_CLASS = "flag-sku-native";
 
@@ -32,7 +32,7 @@
         #content ${ROOT_SELECTOR} .product .p .image .flag.${BADGE_CLASS} {
           display: inline-block !important;
           position: absolute !important;
-          top: clamp(6px, 1.8vw, 9px) !important;
+          top: var(--ee-sku-top, clamp(6px, 1.8vw, 9px)) !important;
           right: clamp(6px, 1.8vw, 9px) !important;
           z-index: 7 !important;
 
@@ -57,7 +57,6 @@
 
       @media (max-width: 360px) {
         #content ${ROOT_SELECTOR} .product .p .image .flag.${BADGE_CLASS} {
-          top: 6px !important;
           right: 6px !important;
           font-size: clamp(8.5px, 2.4vw, 9.5px) !important;
           padding: 3px 6px !important;
@@ -92,6 +91,19 @@
     return txt.replace(/^K[oó]d:\s*/i, "").trim();
   }
 
+  function alignSkuToAnchor(card, image, badge) {
+    const anchor = card.querySelector(`.image .flags .flag:not(.${BADGE_CLASS})`);
+    if (!anchor) {
+      badge.style.removeProperty("--ee-sku-top");
+      return;
+    }
+
+    const imageRect = image.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const alignedTop = Math.round((anchorRect.top - imageRect.top) * 10) / 10;
+    badge.style.setProperty("--ee-sku-top", `${alignedTop}px`);
+  }
+
   function applySkuFlags() {
     const root = document.querySelector(ROOT_SELECTOR);
     if (!root) return;
@@ -112,12 +124,14 @@
 
       badge.textContent = sku;
       badge.title = sku;
+
+      alignSkuToAnchor(card, image, badge);
     });
   }
 
   function attachObserver() {
-    if (window.__eeSkuObserverFinalV3) {
-      window.__eeSkuObserverFinalV3.disconnect();
+    if (window.__eeSkuObserverFinalV4) {
+      window.__eeSkuObserverFinalV4.disconnect();
     }
 
     let queued = false;
@@ -133,7 +147,12 @@
     const root = document.querySelector(ROOT_SELECTOR) || document.body;
     const observer = new MutationObserver(schedule);
     observer.observe(root, { childList: true, subtree: true });
-    window.__eeSkuObserverFinalV3 = observer;
+    window.__eeSkuObserverFinalV4 = observer;
+
+    if (!window.__eeSkuResizeBoundV4) {
+      window.addEventListener("resize", schedule, { passive: true });
+      window.__eeSkuResizeBoundV4 = true;
+    }
   }
 
   function init() {
