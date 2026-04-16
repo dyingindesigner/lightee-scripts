@@ -8,6 +8,11 @@
  * Logout:
  * 1) On logout click, remember current page.
  * 2) After logout landing (home/login/client), redirect once back to remembered page.
+ *
+ * Change notes:
+ * - Candidate order now prefers current URL over referrer to avoid one-step-back return.
+ * - Last public page is persisted in sessionStorage (ee_lastPublicPage) as a safer fallback.
+ * - Hover-menu logout keeps returning user back to the page where logout started.
  */
 (function () {
   "use strict";
