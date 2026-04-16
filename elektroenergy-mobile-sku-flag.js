@@ -1,6 +1,7 @@
 (() => {
-  const STYLE_ID = "ee-native-sku-style-final";
+  const STYLE_ID = "ee-native-sku-style-v3";
   const ROOT_SELECTOR = "#products.products-page.products-block";
+  const BADGE_CLASS = "flag-sku-native";
 
   function injectStyleOnce() {
     if (document.getElementById(STYLE_ID)) return;
@@ -8,10 +9,14 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      #content #productsTop .flag.flag-sku,
-      #content .products-top .flag.flag-sku,
-      #content .top-products .flag.flag-sku,
-      #content .box-topProducts .flag.flag-sku {
+      #content .flag.${BADGE_CLASS} {
+        display: none !important;
+      }
+
+      #content #productsTop .flag.${BADGE_CLASS},
+      #content .products-top .flag.${BADGE_CLASS},
+      #content .top-products .flag.${BADGE_CLASS},
+      #content .box-topProducts .flag.${BADGE_CLASS} {
         display: none !important;
       }
 
@@ -20,49 +25,55 @@
           display: none !important;
         }
 
-        #content ${ROOT_SELECTOR} .product .p .image .flags.flags-default {
-          display: flex !important;
-          align-items: center !important;
-          flex-wrap: nowrap !important;
-          gap: clamp(4px, 1.1vw, 6px) !important;
-          width: 100% !important;
-          box-sizing: border-box !important;
+        #content ${ROOT_SELECTOR} .product .p .image {
+          position: relative !important;
         }
 
-        #content ${ROOT_SELECTOR} .product .p .image .flags.flags-default .flag.flag-sku {
-          margin-left: auto !important;
+        #content ${ROOT_SELECTOR} .product .p .image .flag.${BADGE_CLASS} {
+          display: inline-block !important;
+          position: absolute !important;
+          top: clamp(6px, 1.8vw, 9px) !important;
+          right: clamp(6px, 1.8vw, 9px) !important;
+          z-index: 7 !important;
+
           border-radius: 0 !important;
           background: #d8f4cf !important;
           color: #0d8a2f !important;
           border: 1px solid #b7dfad !important;
+
           font-weight: 700 !important;
           line-height: 1.1 !important;
           font-size: clamp(9px, 2.2vw, 10px) !important;
           padding: clamp(3px, 0.9vw, 5px) clamp(6px, 1.6vw, 9px) !important;
-          max-width: clamp(8ch, 40vw, 18ch) !important;
+
+          max-width: clamp(7ch, 46%, 18ch) !important;
           white-space: nowrap !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
+          box-sizing: border-box !important;
+          pointer-events: none !important;
         }
       }
 
       @media (max-width: 360px) {
-        #content ${ROOT_SELECTOR} .product .p .image .flags.flags-default .flag.flag-sku {
+        #content ${ROOT_SELECTOR} .product .p .image .flag.${BADGE_CLASS} {
+          top: 6px !important;
+          right: 6px !important;
           font-size: clamp(8.5px, 2.4vw, 9.5px) !important;
           padding: 3px 6px !important;
-          max-width: clamp(7ch, 46vw, 16ch) !important;
+          max-width: clamp(7ch, 50%, 15ch) !important;
         }
       }
 
       @media (max-width: 330px) {
-        #content ${ROOT_SELECTOR} .product .p .image .flags.flags-default .flag.flag-sku {
-          max-width: clamp(7ch, 50vw, 15ch) !important;
+        #content ${ROOT_SELECTOR} .product .p .image .flag.${BADGE_CLASS} {
+          max-width: clamp(6ch, 52%, 13ch) !important;
         }
       }
 
       @media (min-width: 768px) and (max-width: 991px) {
-        #content ${ROOT_SELECTOR} .product .p .image .flags.flags-default .flag.flag-sku {
-          max-width: clamp(10ch, 34vw, 20ch) !important;
+        #content ${ROOT_SELECTOR} .product .p .image .flag.${BADGE_CLASS} {
+          max-width: clamp(10ch, 34%, 20ch) !important;
         }
       }
     `;
@@ -92,29 +103,22 @@
       const image = card.querySelector(".image");
       if (!image) return;
 
-      let flags = image.querySelector(".flags.flags-default");
-      if (!flags) {
-        flags = document.createElement("div");
-        flags.className = "flags flags-default";
-        image.appendChild(flags);
-      }
-
-      let badge = flags.querySelector(".flag.flag-sku");
+      let badge = image.querySelector(`.flag.${BADGE_CLASS}`);
       if (!badge) {
         badge = document.createElement("span");
-        badge.className = "flag flag-sku";
-        flags.appendChild(badge);
+        badge.className = `flag ${BADGE_CLASS}`;
+        image.appendChild(badge);
       }
 
       badge.textContent = sku;
       badge.title = sku;
-      badge.style.borderRadius = "0";
     });
   }
 
-  function init() {
-    injectStyleOnce();
-    applySkuFlags();
+  function attachObserver() {
+    if (window.__eeSkuObserverFinalV3) {
+      window.__eeSkuObserverFinalV3.disconnect();
+    }
 
     let queued = false;
     const schedule = () => {
@@ -126,14 +130,16 @@
       });
     };
 
-    if (window.__eeSkuObserverFinal) {
-      window.__eeSkuObserverFinal.disconnect();
-    }
-
     const root = document.querySelector(ROOT_SELECTOR) || document.body;
     const observer = new MutationObserver(schedule);
     observer.observe(root, { childList: true, subtree: true });
-    window.__eeSkuObserverFinal = observer;
+    window.__eeSkuObserverFinalV3 = observer;
+  }
+
+  function init() {
+    injectStyleOnce();
+    applySkuFlags();
+    attachObserver();
   }
 
   if (document.readyState === "loading") {
