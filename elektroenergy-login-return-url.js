@@ -2,7 +2,7 @@
  * Elektroenergy.sk — return flow for login and logout.
  *
  * Login:
- * 1) Before submit, set hidden referer from backTo/referrer/current page candidate.
+ * 1) Before submit, set hidden referer from candidate priority.
  * 2) Fallback redirect from /klient/ to remembered page after successful login.
  *
  * Logout:
@@ -14,6 +14,7 @@
 
   var STORAGE_LOGIN_KEY = "ee_returnAfterLogin";
   var STORAGE_LOGOUT_KEY = "ee_returnAfterLogout";
+  var STORAGE_LAST_PUBLIC_KEY = "ee_lastPublicPage";
   var STORAGE_TTL_MS = 30 * 60 * 1000;
 
   function normalizePath(pathname) {
@@ -135,6 +136,18 @@
     } catch (e) {}
   }
 
+  function rememberLastPublicPage() {
+    var current = window.location.href;
+    if (!isAllowedReturnUrl(current, { allowClientRoot: true })) return;
+    writeStoredUrl(STORAGE_LAST_PUBLIC_KEY, current);
+  }
+
+  function getLastPublicCandidateUrl() {
+    var last = readStoredUrl(STORAGE_LAST_PUBLIC_KEY);
+    if (!last) return null;
+    return isAllowedReturnUrl(last, { allowClientRoot: false }) ? last : null;
+  }
+
   function getBackToCandidateUrl() {
     try {
       var backTo = new URLSearchParams(window.location.search).get("backTo");
@@ -159,7 +172,12 @@
   }
 
   function resolveLoginReturnCandidate() {
-    return getBackToCandidateUrl() || getReferrerCandidateUrl() || getCurrentCandidateUrl();
+    return (
+      getBackToCandidateUrl() ||
+      getCurrentCandidateUrl() ||
+      getLastPublicCandidateUrl() ||
+      getReferrerCandidateUrl()
+    );
   }
 
   function rememberLoginReturnUrl(form) {
@@ -248,6 +266,7 @@
   document.addEventListener("click", onClickCapture, true);
 
   function scheduleChecks() {
+    rememberLastPublicPage();
     tryRedirectAfterLoginLanding();
     tryRedirectAfterLogoutLanding();
     setTimeout(function () {
